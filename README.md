@@ -42,8 +42,11 @@ In SD the CLIP text embedder is used, it has 2 steps:
 - Then the transformer turns these 77 tokens into vectors in 768-dimensional space.
 
 Example:
+
 Text: `"photo of a couch, photorealistic"`
+
 Tokens: `tensor([[49406, 1125, 539, 320, 12724, 267, 1153, 16157, 49407, 49407, 49407, ..., 49407]], device='cuda:0')`
+
 Lookup up in vocab, this is: `['<|startoftext|>', 'photo</w>', 'of</w>', 'a</w>', 'couch</w>', ',</w>', 'photo', 'realistic</w>', '<|endoftext|>', '<|endoftext|>', ..., '<|endoftext|>']`
 
 Reading:
