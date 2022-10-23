@@ -1,6 +1,8 @@
 from models.latent import LatentDiffusion
-from omegaconf import OmegaConf
 from enum import Enum
+from transformers import logging
+
+logging.set_verbosity_error()
 
 class DiffusionModelInfo:
     def __init__(self, filename, config_file, name, info_url, download_url, description):
@@ -89,7 +91,7 @@ class DIFF_MODEL(Enum):
 class DiffusionModel(LatentDiffusion):
     def __init__(self, model: DIFF_MODEL):
         # Setup model according to config
-        super().__init__(**OmegaConf.load("data/diffusion/" + model.value.config_file + ".yaml"))
+        super().__init__()
         
         # Load checkpoint data in the model
         self.init_from_ckpt("data/diffusion/" + model.value.filename + ".ckpt")
@@ -99,6 +101,3 @@ class DiffusionModel(LatentDiffusion):
 
         # Load model to GPU
         self.cuda()
-
-    def to_latent(self, prompt: str):
-        return self.get_learned_conditioning(prompt)

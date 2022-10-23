@@ -65,8 +65,8 @@ class Sampler():
         self.set_seed(seed)
         shape = [4, height // 8, width // 8]
 
-        c = self.model.get_learned_conditioning(batch_size * [prompt]) if isinstance(prompt, str) else prompt
-        uc = self.model.get_learned_conditioning(batch_size * [exclude]) if isinstance(exclude, str) else exclude
+        c = self.model.to_latent(batch_size * [prompt]) if isinstance(prompt, str) else prompt
+        uc = self.model.to_latent(batch_size * [exclude]) if isinstance(exclude, str) else exclude
 
         samples = self._sample(batch_size, c, uc, cfg, steps, shape)
         samples = self.model.decode_first_stage(samples)
@@ -97,8 +97,8 @@ class Sampler():
         init_image = repeat(init_image, '1 ... -> b ...', b=batch_size)
         init_latent = self.model.get_first_stage_encoding(self.model.encode_first_stage(init_image))  # move to latent space
 
-        c = self.model.get_learned_conditioning(batch_size * [prompt]) if isinstance(prompt, str) else prompt
-        uc = self.model.get_learned_conditioning(batch_size * [exclude]) if isinstance(exclude, str) else exclude
+        c = self.model.to_latent(batch_size * [prompt]) if isinstance(prompt, str) else prompt
+        uc = self.model.to_latent(batch_size * [exclude]) if exclude is None or isinstance(exclude, str) else exclude
 
         samples = self._sample_image(batch_size, c, uc, cfg, steps, init_latent, strength, shape)
         samples = self.model.decode_first_stage(samples)
@@ -111,7 +111,7 @@ class BaseSampler(Sampler):
         self.sampler = sampler_class(model)
 
     def _sample(self, batch_size, c, uc, cfg, steps, shape):
-        samples, _ = self.sampler.sample(S=steps,
+        samples = self.sampler.sample(S=steps,
             conditioning=c,
             batch_size=batch_size,
             shape=shape,

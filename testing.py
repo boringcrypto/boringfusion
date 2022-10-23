@@ -1,12 +1,12 @@
 import os
+import time
 import numpy as np
+import torch
 from PIL import Image
 from einops import rearrange
-from transformers import logging
 from core.model import DIFF_MODEL, DiffusionModel
-from core.samplers import EulerASampler
-
-logging.set_verbosity_error()
+from core.samplers import DDIMSampler, EulerASampler, PLMSSampler
+from models.encoders import FrozenCLIPEmbedder
 
 def save_samples(samples):
     base_count = len(os.listdir("outputs"))
@@ -16,16 +16,47 @@ def save_samples(samples):
         base_count += 1
 
 def main():
+    clip = FrozenCLIPEmbedder().eval().cuda()
+    prompt = clip("photo of a couch, photorealistic")
+    negative_prompt = clip("")
+    torch.cuda.empty_cache()
+    clip.cpu()
+    time.sleep(5)
+
     model = DiffusionModel(DIFF_MODEL.StableDiffusion1_5)
 
     seed = 42
 
-    for i in range(10):
+    for i in range(4):
         samples = EulerASampler(model).sample(
             seed,
             512, 512, 1,
-            "photo of a couch, photorealistic", 
-            "", 7.5, 20
+            prompt, 
+            negative_prompt, 7.5, 20
+        )
+
+        save_samples(samples)
+
+        seed += 1
+
+    for i in range(3):
+        samples = DDIMSampler(model).sample(
+            seed,
+            512, 512, 1,
+            prompt, 
+            negative_prompt, 7.5, 20
+        )
+
+        save_samples(samples)
+
+        seed += 1
+
+    for i in range(3):
+        samples = PLMSSampler(model).sample(
+            seed,
+            512, 512, 1,
+            prompt, 
+            negative_prompt, 7.5, 20
         )
 
         save_samples(samples)
