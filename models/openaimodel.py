@@ -1,11 +1,10 @@
 from abc import abstractmethod
-import math
 
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.util import checkpoint, conv_nd, linear, zero_module, normalization, timestep_embedding
+from models.util import conv_nd, linear, zero_module, normalization, timestep_embedding
 from models.attention import SpatialTransformer
 
 
