@@ -5,7 +5,7 @@ from einops import rearrange
 from typing import Any, Optional
 import xformers.ops
 
-from models.util import exists, default, zero_module
+from .util import exists, default, zero_module
 
 
 # feedforward

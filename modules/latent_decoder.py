@@ -2,6 +2,9 @@ import torch
 import pytorch_lightning as pl
 import torch.nn as nn
 import numpy as np
+from PIL import Image
+
+from .util import BoringModule, should_run_on_gpu
 
 def nonlinearity(x):
     # swish
@@ -112,19 +115,19 @@ class AttnBlock(nn.Module):
         v = self.v(h_)
 
         # compute attention
-        b,c,h,w = q.shape
-        q = q.reshape(b,c,h*w)
+        batch, channels, height, width = q.shape
+        q = q.reshape(batch, channels, height*width)
         q = q.permute(0,2,1)   # b,hw,c
-        k = k.reshape(b,c,h*w) # b,c,hw
+        k = k.reshape(batch, channels, height*width) # b,c,hw
         w_ = torch.bmm(q,k)     # b,hw,hw    w[b,i,j]=sum_c q[b,i,c]k[b,c,j]
-        w_ = w_ * (int(c)**(-0.5))
+        w_ = w_ * (int(channels)**(-0.5))
         w_ = torch.nn.functional.softmax(w_, dim=2)
 
         # attend to values
-        v = v.reshape(b,c,h*w)
+        v = v.reshape(batch, channels, height*width)
         w_ = w_.permute(0,2,1)   # b,hw,hw (first hw of k, second of q)
         h_ = torch.bmm(v,w_)     # b, c,hw (hw of q) h_[b,c,j] = sum_i v[b,c,i] w_[b,i,j]
-        h_ = h_.reshape(b,c,h,w)
+        h_ = h_.reshape(batch, channels, height, width)
 
         h_ = self.proj_out(h_)
 
@@ -239,13 +242,39 @@ class Decoder(nn.Module):
             h = torch.tanh(h)
         return h
 
-class AutoencoderKL(pl.LightningModule):
-    def __init__(self):
+
+class LatentDecoder(BoringModule):
+    def __init__(self, path:str="data/decoder-mse.bin"):
         super().__init__()
         self.decoder = Decoder()
         self.post_quant_conv = torch.nn.Conv2d(4, 4, 1)
+        self.load_state_dict(torch.load(path), False)
 
     def decode(self, z):
         z = self.post_quant_conv(z)
         dec = self.decoder(z)
         return dec
+
+    @should_run_on_gpu
+    @torch.no_grad()
+    def latents_to_images(self, z):
+        # Scale by the fixed scale factor of the SD model
+        z = 1. / 0.18215 * z # scale factor
+
+        # Decode the image from latent space
+        # samples = self.first_stage_model.decode(z)
+        decoder = LatentDecoder().cuda()
+        samples = decoder.decode(z)
+
+        # torchvision.ToPILImage only works on a single image, so here we prepare all images
+        # on the GPU all at once.
+
+        # Normalize from float between -1.0 and 1.0 to floats between 0.0 and 255.0
+        samples = samples.add_(1.0).mul_(127.5).clamp_(min=0.0, max=255.0).type(torch.uint8)
+        # swap from the dimensions for PIL
+        samples = samples.permute(0, 2, 3, 1)
+        # Move the samples to the cpu in into a numpy array
+        samples = samples.cpu().numpy()
+        
+        # Convert all samples into PIL Images
+        return [Image.fromarray(sample) for sample in samples]

@@ -4,8 +4,8 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.util import conv_nd, linear, zero_module, normalization, timestep_embedding
-from models.attention import SpatialTransformer
+from .util import conv_nd, linear, zero_module, normalization, timestep_embedding
+from .attention import SpatialTransformer
 
 
 
@@ -251,7 +251,6 @@ class UNetModel(nn.Module):
         legacy=False,
     ):
         super().__init__()
-        print("UNet model")
         if context_dim is not None:
             from omegaconf.listconfig import ListConfig
             if type(context_dim) == ListConfig:

@@ -1,13 +1,12 @@
-from models.latent import LatentDiffusion
+from modules.stable_diffusion import StableDiffusion
 from enum import Enum
 from transformers import logging
 
 logging.set_verbosity_error()
 
 class DiffusionModelInfo:
-    def __init__(self, filename, config_file, name, info_url, download_url, description):
+    def __init__(self, filename, name, info_url, download_url, description):
         self.filename = filename
-        self.config_file = config_file
         self.name = name
         self.info_url = info_url
         self.download_url = download_url
@@ -16,7 +15,6 @@ class DiffusionModelInfo:
 class DIFF_MODEL(Enum):
     StableDiffusion1_1 = DiffusionModelInfo(
         "sd-v1-1",
-        "sd-base",
         "Stable Diffusion v1.1", 
         "https://huggingface.co/CompVis/stable-diffusion-v-1-1-original",
         "https://huggingface.co/CompVis/stable-diffusion-v-1-1-original/resolve/main/sd-v1-1.ckpt",
@@ -24,7 +22,6 @@ class DIFF_MODEL(Enum):
     )
     StableDiffusion1_2 = DiffusionModelInfo(
         "sd-v1-2", 
-        "sd-base",
         "Stable Diffusion v1.2", 
         "https://huggingface.co/CompVis/stable-diffusion-v-1-2-original",
         "https://huggingface.co/CompVis/stable-diffusion-v-1-2-original/resolve/main/sd-v1-2.ckpt",
@@ -32,7 +29,6 @@ class DIFF_MODEL(Enum):
     )
     StableDiffusion1_3 = DiffusionModelInfo(
         "sd-v1-3", 
-        "sd-base",
         "Stable Diffusion v1.3", 
         "https://huggingface.co/CompVis/stable-diffusion-v-1-3-original",
         "https://huggingface.co/CompVis/stable-diffusion-v-1-3-original/resolve/main/sd-v1-3.ckpt",
@@ -40,7 +36,6 @@ class DIFF_MODEL(Enum):
     )
     StableDiffusion1_4 = DiffusionModelInfo(
         "sd-v1-4", 
-        "sd-base",
         "Stable Diffusion v1.4", 
         "https://huggingface.co/CompVis/stable-diffusion-v-1-4-original",
         "https://huggingface.co/CompVis/stable-diffusion-v-1-4-original/resolve/main/sd-v1-4.ckpt",
@@ -48,7 +43,6 @@ class DIFF_MODEL(Enum):
     )
     StableDiffusion1_5 = DiffusionModelInfo(
         "v1-5-pruned-emaonly", 
-        "sd-base",
         "Stable Diffusion v1.5", 
         "https://huggingface.co/runwayml/stable-diffusion-v1-5",
         "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.ckpt",
@@ -56,7 +50,6 @@ class DIFF_MODEL(Enum):
     )
     WaifuDiffusion1_3 = DiffusionModelInfo(
         "wd-v1-3-float32",
-        "sd-base",
         "Waifu Diffusion v1.3",
         "https://gist.github.com/harubaru/f727cedacae336d1f7877c4bbe2196e1",
         "https://huggingface.co/hakurei/waifu-diffusion-v1-3/blob/main/wd-v1-3-float32.ckpt",
@@ -64,7 +57,6 @@ class DIFF_MODEL(Enum):
     )
     NovelAI_Full = DiffusionModelInfo(
         "nai-full-pruned",
-        "novelai",
         "Novel AI Full leaked",
         "https://blog.novelai.net/image-generation-announcement-807b3cf0afec",
         "magnet:?xt=urn:btih:5bde442da86265b670a3e5ea3163afad2c6f8ecc&dn=novelaileak",
@@ -72,7 +64,6 @@ class DIFF_MODEL(Enum):
     )
     HentaiAI = DiffusionModelInfo(
         "HD-16",
-        "sd-base",
         "Hentai Diffusion v16",
         "https://github.com/Delcos/Hentai-Diffusion",
         "https://huggingface.co/Deltaadams/Hentai-Diffusion/resolve/main/HD-16.ckpt",
@@ -88,16 +79,10 @@ class DIFF_MODEL(Enum):
     #     "Japanese Stable Diffusion is a Japanese-specific latent text-to-image diffusion model capable of generating photo-realistic images given any text input. Trained on approximately 100 million images with Japanese captions, including the Japanese subset of LAION-5B."
     # )
 
-class DiffusionModel(LatentDiffusion):
+class DiffusionModel(StableDiffusion):
     def __init__(self, model: DIFF_MODEL):
         # Setup model according to config
         super().__init__()
         
-        # Load checkpoint data in the model
-        self.init_from_ckpt("data/diffusion/" + model.value.filename + ".ckpt")
-
         # Turn off training, switch to evaluation mode
         self.eval()
-
-        # Load model to GPU
-        self.cuda()

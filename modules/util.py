@@ -28,17 +28,6 @@ def make_beta_schedule(schedule, n_timestep, linear_start=1e-4, linear_end=2e-2,
     return betas.numpy()
 
 
-class CheckpointFunction(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, run_function, length, *args):
-        ctx.run_function = run_function
-        ctx.input_tensors = list(args[:length])
-        ctx.input_params = list(args[length:])
-
-        with torch.no_grad():
-            output_tensors = ctx.run_function(*ctx.input_tensors)
-        return output_tensors
-
 def conv_nd(dims, *args, **kwargs):
     """
     Create a 1D, 2D, or 3D convolution module.
@@ -140,3 +129,37 @@ def noise_like(shape, device, repeat=False):
     repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(shape[0], *((1,) * (len(shape) - 1)))
     noise = lambda: torch.randn(shape, device=device)
     return repeat_noise() if repeat else noise()
+
+
+def should_run_on_gpu(func):
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        before_device = self.device
+        if not self.device.type == "cuda" and torch.cuda.is_available():
+            print("Moving ", self.__class__.__name__, " to GPU")
+            self.cuda()
+
+        result = func(*args, **kwargs)
+
+        if before_device != self.device:
+            print("Moving ", self.__class__.__name__, " back to", before_device.type)
+            self.to(before_device)
+
+        return result
+    return wrapper
+
+class BoringModule(nn.Module):
+    @property
+    def device(self):
+        try:
+            return next(self.parameters()).device
+        except:
+            return torch.device('cpu')
+
+class BoringModuleMixin():
+    @property
+    def device(self):
+        try:
+            return next(self.parameters()).device
+        except:
+            return torch.device('cpu')
