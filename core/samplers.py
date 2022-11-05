@@ -103,7 +103,7 @@ class Sampler(BoringModule):
 
     @should_run_on_gpu
     @torch.no_grad()
-    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: str or torch.Tensor, negative_prompt: str or torch.Tensor, cfg: float, steps: int):
+    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor, negative_prompt: torch.Tensor, cfg: float, steps: int):
         """Create images from prompt
 
         Args:
@@ -122,11 +122,14 @@ class Sampler(BoringModule):
         self.set_seed(seed)
         shape = [4, height // 8, width // 8]
 
+        prompt = prompt.to(self.device)
+        negative_prompt = negative_prompt.to(self.device)
+
         samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
         return samples
 
     @torch.no_grad()
-    def sample_img(self, seed: int, width: int, height: int, batch_size: int, init_image, prompt: str or torch.Tensor, exclude: str or torch.Tensor, cfg: float, strength: float, steps: int):
+    def sample_img(self, seed: int, width: int, height: int, batch_size: int, init_image, prompt: torch.Tensor, exclude: torch.Tensor, cfg: float, strength: float, steps: int):
         """Create images from images
 
         Args:

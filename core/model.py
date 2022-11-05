@@ -1,6 +1,7 @@
 from modules.stable_diffusion import StableDiffusion
 from enum import Enum
 from transformers import logging
+import torch
 
 logging.set_verbosity_error()
 
@@ -83,6 +84,9 @@ class DiffusionModel(StableDiffusion):
     def __init__(self, model: DIFF_MODEL):
         # Setup model according to config
         super().__init__()
-        
+
+        # Load model from disk
+        self.load_state_dict(torch.load(model.value.filename))
+
         # Turn off training, switch to evaluation mode
         self.eval()

@@ -16,7 +16,6 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
     def __init__(self):
         super().__init__()
         self.diffusion_model = UNetModel()
-        self.load_state_dict(torch.load("data/unet-sd-1.5.bin"))
 
         betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
         alphas = 1. - betas

@@ -101,22 +101,44 @@ class StableDiffusionModelData:
 
         self.vae_decoder_layers.set_from_state_dict(vae_layers, "decoder", diffusers_mappings.vae_encoder)
         # These layers have the correct number of elements, but coem in a different shape
-        self.vae_decoder_layers['mid.attn_1.k.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['mid.attn_1.proj_out.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['mid.attn_1.q.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['mid.attn_1.v.weight'].resize_(torch.Size([512, 512, 1, 1]))
+        self.vae_decoder_layers['mid.attn_1.k.weight'] = self.vae_decoder_layers['mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_decoder_layers['mid.attn_1.proj_out.weight'] = self.vae_decoder_layers['mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_decoder_layers['mid.attn_1.q.weight'] = self.vae_decoder_layers['mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_decoder_layers['mid.attn_1.v.weight'] = self.vae_decoder_layers['mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
 
         self.vae_encoder_layers.set_from_state_dict(vae_layers, "encoder", diffusers_mappings.vae_decoder)
         # These layers have the correct number of elements, but coem in a different shape
-        self.vae_encoder_layers['mid.attn_1.k.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['mid.attn_1.proj_out.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['mid.attn_1.q.weight'].resize_(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['mid.attn_1.v.weight'].resize_(torch.Size([512, 512, 1, 1]))
+        self.vae_encoder_layers['mid.attn_1.k.weight'] = self.vae_encoder_layers['mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_encoder_layers['mid.attn_1.proj_out.weight'] = self.vae_encoder_layers['mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_encoder_layers['mid.attn_1.q.weight'] = self.vae_encoder_layers['mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
+        self.vae_encoder_layers['mid.attn_1.v.weight'] = self.vae_encoder_layers['mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
 
         unet_layers = torch.load(os.path.join(directory, "unet", "diffusion_pytorch_model.bin"), map_location='cpu')
         self.unet_layers.set_from_state_dict(unet_layers, "", diffusers_mappings.unet)
 
         return self
+
+    @property
+    def full_state_dict(self):
+        full = {
+            "cond_stage_model": {},
+            "first_stage_model": {},
+            "model": {}
+        }
+        for key in self.clip_text_encoder_layers.keys():
+            full["cond_stage_model"]["transformer.text_model." + key] = self.clip_text_encoder_layers[key]
+
+        for key in self.vae_encoder_layers.keys():
+            full["first_stage_model"]["encoder." + key] = self.vae_encoder_layers[key]
+
+        for key in self.vae_decoder_layers.keys():
+            full["first_stage_model"]["decoder." + key] = self.vae_decoder_layers[key]
+
+        for key in self.unet_layers.keys():
+            full["model"]["diffusion_model." + key] = self.unet_layers[key]
+
+        return full
+
 
     def __str__(self) -> str:
         lines = []
@@ -128,12 +150,35 @@ class StableDiffusionModelData:
         return str.join("\r\n", lines)
 
 def main():
-    diff = StableDiffusionModelData().load_diffusers("data/diffusers/stable-diffusion-v1-4")
-    print(diff)
-    print()
+    # base = StableDiffusionModelData().load_checkpoint("data/checkpoints/sd-v1-4.ckpt")
+    # print(base)
+    # print()
 
-    data = StableDiffusionModelData().load_checkpoint("data/checkpoints/sd-v1-4.ckpt")
-    print(data)
+    from diffusers import StableDiffusionPipeline
+
+    model_id = "CompVis/stable-diffusion-v1-4"
+    device = "cuda"
+
+    pipe = StableDiffusionPipeline.from_pretrained(model_id, use_auth_token=True)
+    pipe = pipe.to(device)
+
+    prompt = "a photo of an astronaut riding a horse on mars"
+    with torch.autocast("cuda"):
+        image = pipe(prompt, guidance_scale=7.5).images[0]  
+        
+    image.save("astronaut_rides_horse.png")    
+
+    # wd = StableDiffusionModelData().load_checkpoint("data/checkpoints/LOKEAN_MISSIONARY_POV.ckpt")
+    # wd.unet_layers.half()
+    # print(wd)
+
+    # diff = ModelLayers("Diff", 686)
+    # for key in base.unet_layers.keys():
+    #     diff[key] = base.unet_layers[key] - wd.unet_layers[key]
+
+    # torch.save(wd.unet_layers, "full.bin")
+    # torch.save(diff, "diff.bin")
+    #print(diff)
 
     # for checkpoint_filename in glob.glob("data/checkpoints/*.ckpt"):
     #     data = StableDiffusionModelData()
