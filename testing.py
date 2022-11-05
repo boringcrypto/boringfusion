@@ -27,32 +27,30 @@ def main():
     # base = StableDiffusionModelData().load_checkpoint("data/checkpoints/Mixed.ckpt")
     base = StableDiffusionModelData().load_checkpoint("data/checkpoints/v1-5-pruned-emaonly.ckpt")
     wd = StableDiffusionModelData().load_checkpoint("data/checkpoints/wd-v1-3-float32.ckpt")
-    combined = {}
-    for key in base.unet_layers.keys():
-        combined[key] = (base.unet_layers[key] + wd.unet_layers[key]) / 2
-    print(base)
-    print(wd)
 
     model = StableDiffusion()
-    model.diffusion_model.load_state_dict(combined)
-    model.cuda()
     decoder = LatentDecoder().cuda()
 
-    seed = 42
+    seed = 45
 
     for i in range(10):
+        combined = base.unet_layers.merge(wd.unet_layers, 0.1 * i)
+        model.diffusion_model.load_state_dict(combined)
+        model.cuda()
+
         prompt = EmbeddingBuilder(clip)
-        prompt.add_prompt("award winning photo of a ")
-        prompt.add_combined_prompt(
-            ["shark", "dragon", "cat"],
-            [1.5, 1, 1]
-        )
-        # prompt.add_prompt("in the ocean")
-        prompt.add_prompt("in a lush forest")
-        prompt.add_prompt(", by national geographic", weight = 1.3)
+        prompt.add_prompt("1girl, black eyes, black hair, black sweater, blue background, bob cut, closed mouth, glasses, medium hair, red-framed eyewear, simple background, solo, sweater, upper body, wide-eyed")
+        # prompt.add_prompt("award winning photo of a ")
+        # prompt.add_combined_prompt(
+        #     ["shark", "dragon", "cat"],
+        #     [1.5, 1, 1]
+        # )
+        # # prompt.add_prompt("in the ocean")
+        # prompt.add_prompt("in a lush forest")
+        # prompt.add_prompt(", by national geographic", weight = 1.3)
 
         samples = EulerASampler(model).sample(
-            seed + i,
+            seed,
             512, 512, 1,
             prompt.embedding, 
             empty_prompt, 7.5, 20
