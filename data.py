@@ -1,4 +1,5 @@
 import os
+import time
 import glob
 import hashlib
 from collections import OrderedDict
@@ -28,8 +29,32 @@ class ModelLayers(OrderedDict):
         return str.join(", ", [str(dtype) for dtype in set(types)])
 
     @property
-    def hash(self):
-        return hashlib.md5(str(self.items()).encode()).hexdigest()[:8]
+    def version_hash(self):
+        total = torch.zeros(256)
+        for key in self.keys():
+            flat = self[key].flatten()
+            length = flat.size(0)
+            if (length<=256):
+                total[0:length] += flat
+            else:
+                total.add_(flat[length // 2 - 128 : length // 2 + 128])
+        hash = hashlib.md5(str([e.item() for e in total]).encode()).hexdigest()[:8]
+
+        return hash
+
+    @property
+    def content_hash(self):
+        total = torch.zeros(256)
+        for key in self.keys():
+            flat = self[key].flatten()
+            length = flat.size(0)
+            if (length<=256):
+                total[0:length] += flat.half()
+            else:
+                total.add_(flat[length // 2 - 128 : length // 2 + 128].half())
+        hash = hashlib.md5(str([e.item() for e in total]).encode()).hexdigest()[:8]
+
+        return hash
 
     @property
     def parameter_count(self):
@@ -80,7 +105,7 @@ class ModelLayers(OrderedDict):
 
     def __str__(self):
         if len(self):
-            return self.name + ": " + self.hash + " - " + self.dtypes + " - " + str(self.parameter_count // 1000000) + "M params"
+            return self.name + ": " + self.content_hash + ":" + self.version_hash + " - " + self.dtypes + " - " + str(self.parameter_count // 1000000) + "M params"
         else:
             return self.name + ": None"
 
@@ -117,8 +142,6 @@ class StableDiffusionModelData:
         if "model_ema" in key_tree and len(key_tree["model_ema"]) >= self.unet_ema_layers.layer_count:
             key_map = { key.replace(".", "") : key for key in self.unet_layers.keys() }
             self.unet_ema_layers.set_from_state_dict(state_dict, "model_ema.diffusion_model", key_map)
-
-        print(key_tree["model_ema"].keys())
 
         return self
 
@@ -186,8 +209,8 @@ def main():
     # print(base)
     # print()
 
-    wd = StableDiffusionModelData().load_checkpoint("data/checkpoints/v1-5-pruned.ckpt")
-    print(wd)
+    # wd = StableDiffusionModelData().load_checkpoint("data/checkpoints/v1-5-pruned.ckpt")
+    # print(wd)
 
     # diff = ModelLayers("Diff", 686)
     # for key in base.unet_layers.keys():
@@ -197,10 +220,11 @@ def main():
     # torch.save(diff, "diff.bin")
     #print(diff)
 
-    # for checkpoint_filename in glob.glob("data/checkpoints/*.ckpt"):
-    #     data = StableDiffusionModelData()
-    #     data.load_checkpoint(checkpoint_filename)
-    #     print(data)
+    for checkpoint_filename in glob.glob("data/checkpoints/*.ckpt"):
+        data = StableDiffusionModelData()
+        data.load_checkpoint(checkpoint_filename)
+        print(data)
+        print()
 
 if __name__ == "__main__":
     main()

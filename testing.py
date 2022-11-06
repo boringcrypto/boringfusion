@@ -38,16 +38,17 @@ def main():
         model.diffusion_model.load_state_dict(combined)
         model.cuda()
 
-        prompt = EmbeddingBuilder(clip)
         prompt.add_prompt("1girl, black eyes, black hair, black sweater, blue background, bob cut, closed mouth, glasses, medium hair, red-framed eyewear, simple background, solo, sweater, upper body, wide-eyed")
-        # prompt.add_prompt("award winning photo of a ")
-        # prompt.add_combined_prompt(
-        #     ["shark", "dragon", "cat"],
-        #     [1.5, 1, 1]
-        # )
-        # # prompt.add_prompt("in the ocean")
-        # prompt.add_prompt("in a lush forest")
-        # prompt.add_prompt(", by national geographic", weight = 1.3)
+
+        prompt = EmbeddingBuilder(clip)
+        prompt.add_prompt("award winning photo of a ")
+        prompt.add_combined_prompt(
+            ["shark", "dragon", "cat"],
+            [1.5, 1, 1]
+        )
+        # prompt.add_prompt("in the ocean")
+        prompt.add_prompt("in a lush forest")
+        prompt.add_prompt(", by national geographic", weight = 1.3)
 
         samples = EulerASampler(model).sample(
             seed,
