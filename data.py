@@ -80,6 +80,28 @@ class ModelLayers(OrderedDict):
         for key in self.keys():
             self[key] = self[key].half()
 
+    def save(self, filename):
+        torch.save({
+            "name": self.name,
+            "layer_count": self.layer_count,
+            "state_dict": { key:value for key, value in self.items() },
+
+            # This meta-data is stored so we don't have to load the full data to get this info
+            # Once loaded, this info should be ignored and the actual class properties used
+            "content_hash": self.content_hash,
+            "version_hash": self.version_hash,
+            "dtypes": self.dtypes,
+            "parameter_count": self.parameter_count
+        }, filename)
+
+    @classmethod
+    def load(cls, filename):
+        data = torch.load(filename)
+        model_layers = cls(data["name"], data["layer_count"])
+        model_layers.set_from_state_dict(data["state_dict"])
+
+        return model_layers
+
     def merge_(self, model, weight=0.5):
         """Merge with another model (in place)
 
@@ -172,6 +194,34 @@ class StableDiffusionModelData:
 
         return self
 
+    def save_native(self):
+        if len(self.clip_text_encoder_layers):
+            filename = "data/clip-text-encoder/" + self.clip_text_encoder_layers.content_hash + "-" + self.clip_text_encoder_layers.version_hash + "-" + self.clip_text_encoder_layers.dtypes + ".bin"
+            if not os.path.exists(filename):
+                self.clip_text_encoder_layers.save(filename)
+
+        if len(self.vae_encoder_layers):
+            filename = "data/vae-encoder/" + self.vae_encoder_layers.content_hash + "-" + self.vae_encoder_layers.version_hash + "-" + self.vae_encoder_layers.dtypes + ".bin"
+            if not os.path.exists(filename):
+                self.vae_encoder_layers.save(filename)
+
+        if len(self.vae_decoder_layers):
+            filename = "data/vae-decoder/" + self.vae_decoder_layers.content_hash + "-" + self.vae_decoder_layers.version_hash + "-" + self.vae_decoder_layers.dtypes + ".bin"
+            if not os.path.exists(filename):
+                self.vae_decoder_layers.save(filename)
+
+        if len(self.unet_ema_layers):
+            filename = "data/unet/" + self.unet_ema_layers.content_hash + "-" + self.unet_ema_layers.version_hash + "-" + self.unet_ema_layers.dtypes + ".bin"
+            if not os.path.exists(filename):
+                self.unet_ema_layers.save(filename)
+            print('"' + os.path.split(self.filename)[1][0:-5] + '": "' + filename + '",')
+        elif len(self.unet_layers):
+            filename = "data/unet/" + self.unet_layers.content_hash + "-" + self.unet_layers.version_hash + "-" + self.unet_layers.dtypes + ".bin"
+            if not os.path.exists(filename):
+                self.unet_layers.save(filename)
+            print('"' + os.path.split(self.filename)[1][0:-5] + '": "' + filename + '",')
+
+
     @property
     def full_state_dict(self):
         full = {
@@ -223,8 +273,9 @@ def main():
     for checkpoint_filename in glob.glob("data/checkpoints/*.ckpt"):
         data = StableDiffusionModelData()
         data.load_checkpoint(checkpoint_filename)
-        print(data)
-        print()
+        # print(data)
+        # print()
+        data.save_native()
 
 if __name__ == "__main__":
     main()

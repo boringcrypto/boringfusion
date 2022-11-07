@@ -15,7 +15,7 @@ from PIL import Image
 class StableDiffusion(pl.LightningModule, BoringModuleMixin):
     def __init__(self):
         super().__init__()
-        self.diffusion_model = UNetModel()
+        self.diffusion_model = UNetModel(use_fp16=True)
 
         betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
         alphas = 1. - betas
@@ -25,7 +25,7 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
 
-        to_torch = partial(torch.tensor, dtype=torch.float32)
+        to_torch = partial(torch.tensor, dtype=torch.float16)
 
         self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))

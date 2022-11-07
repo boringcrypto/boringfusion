@@ -82,7 +82,7 @@ RANDOM_SEED = -1
 
 def load_img(path):
     image = Image.open(path).convert("RGB")
-    image = np.array(image).astype(np.float32) / 255.0
+    image = np.array(image).astype(np.float16) / 255.0
     image = image[None].transpose(0, 3, 1, 2)
     image = torch.from_numpy(image)
     return 2.*image - 1.
@@ -101,7 +101,6 @@ class Sampler(BoringModule):
     def set_seed(self, seed):
         seed_everything(seed if seed != RANDOM_SEED else random.randint(0, 1000000000))
 
-    @should_run_on_gpu
     @torch.no_grad()
     def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor, negative_prompt: torch.Tensor, cfg: float, steps: int):
         """Create images from prompt
@@ -125,7 +124,8 @@ class Sampler(BoringModule):
         prompt = prompt.to(self.device)
         negative_prompt = negative_prompt.to(self.device)
 
-        samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
+        with torch.autocast("cuda", torch.float16):
+            samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
         return samples
 
     @torch.no_grad()
@@ -238,7 +238,6 @@ class EulerASampler(KSampler):
         super().__init__(model)
 
     def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        print(x.device, sigmas.device)
         return k_diffusion.sampling.sample_euler_ancestral(model_wrap_cfg, x, sigmas, extra_args)
 
 class DPMAdaptiveSampler(KSampler):
