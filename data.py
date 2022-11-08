@@ -159,7 +159,7 @@ class StableDiffusionModelData:
     def load_checkpoint(self, filename, unsafe=False):
         self.filename = filename
 
-        checkpoint_data = torch.load(filename)
+        checkpoint_data = torch_load(filename)
 
         state_dict = checkpoint_data["state_dict"] if 'state_dict' in checkpoint_data.keys() else checkpoint_data
         key_tree = treeify(state_dict.keys())
