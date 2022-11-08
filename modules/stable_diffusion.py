@@ -20,7 +20,7 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
 
-        to_torch = partial(torch.tensor, dtype=torch.float32)
+        to_torch = partial(torch.tensor, dtype=self.dtype)
 
         self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
@@ -35,7 +35,6 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         x = x.to(self.device)
         t = t.to(self.device)
         cc = torch.cat(c_crossattn, 1).to(self.device)
-        
         out = self.diffusion_model(x, t, context=cc)
 
         return out
@@ -53,5 +52,7 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         else:
             return x_recon
 
-
+    @property
+    def dtype(self):
+        self.diffusion_model.dtype
 

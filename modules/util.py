@@ -57,7 +57,7 @@ def zero_module(module):
     return module
 
 
-def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False):
+def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False, dtype=torch.float32):
     """
     Create sinusoidal timestep embeddings.
     :param timesteps: a 1-D Tensor of N indices, one per batch element.
@@ -77,7 +77,7 @@ def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False):
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     else:
         embedding = repeat(timesteps, 'b -> b d', d=dim)
-    return embedding
+    return embedding.to(dtype=dtype)
 
 
 def normalization(channels):
@@ -92,6 +92,12 @@ def normalization(channels):
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
+
+
+# Since we don't need Dropout, but we cannot remove it in certain places as it would change keys, we use this DummyModule
+class DummyModule(nn.Module):
+    def forward(self, x):
+        return x
 
 
 def make_ddim_timesteps(ddim_discr_method, num_ddim_timesteps, num_ddpm_timesteps, verbose=True):
