@@ -1,11 +1,12 @@
 import os
-import time
 import glob
 import hashlib
+import core.safe_unpickler
 from collections import OrderedDict
 
 import torch
 from core import diffusers_mappings
+from core.safe_unpickler import torch_load
 
 def treeify(items):
     tree = {}
@@ -18,7 +19,7 @@ def treeify(items):
     return tree
 
 class ModelLayers(OrderedDict):
-    def __init__(self, name, layer_count) -> None:
+    def __init__(self, name="", layer_count=0) -> None:
         self.name = name
         self.layer_count = layer_count
         super().__init__()
@@ -67,9 +68,9 @@ class ModelLayers(OrderedDict):
         else:
             print(self.name, "model has the wrong number of layers, skipped", len(layers), self.layer_count)
 
-    def set_from_state_dict(self, state_dict, base_key="", mapping=None):
+    def set_from_state_dict(self, state_dict, base_key="", mapping=None, prepend=""):
         keys = [key for key in state_dict.keys() if not len(base_key) or key.startswith(base_key)]
-        layers = {mapping[key[len(base_key):]] if mapping else key[len(base_key):] : state_dict[key] for key in keys}
+        layers = {prepend + mapping[key[len(base_key):]] if mapping else prepend + key[len(base_key):] : state_dict[key] for key in keys}
         
         # Sort by key to ensure order is always the same to generate the same hash
         self.set({key : layers[key] for key in sorted(layers.keys())})
@@ -96,7 +97,7 @@ class ModelLayers(OrderedDict):
 
     @classmethod
     def load(cls, filename):
-        data = torch.load(filename)
+        data = torch_load(filename, map_location="cpu")
         model_layers = cls(data["name"], data["layer_count"])
         model_layers.set_from_state_dict(data["state_dict"])
 
@@ -112,6 +113,8 @@ class ModelLayers(OrderedDict):
         for key in self.keys():
             self[key] = self[key] * (1 - weight) + model[key] * weight
 
+        return self
+
     def merge(self, model, weight=0.5):
         """Merge with another model and returns the merged ModelLayers
 
@@ -123,6 +126,19 @@ class ModelLayers(OrderedDict):
         for key in self.keys():
             combined[key] = self[key] * (1 - weight) + model[key] * weight
         
+        return combined
+
+    def add_diff_(self, base_model, trained_model, weight=1):
+        for key in self.keys():
+            self[key] = self[key] + (trained_model[key] - base_model[key]) * weight
+
+        return self
+
+    def add_diff_(self, base_model, trained_model, weight=1):
+        combined = ModelLayers(self.name, self.layer_count)
+        for key in self.keys():
+            combined[key] = self[key] + (trained_model[key] - base_model[key]) * weight
+
         return combined
 
     def __str__(self):
@@ -140,23 +156,29 @@ class StableDiffusionModelData:
         self.unet_layers = ModelLayers("UNet", 686)
         self.unet_ema_layers = ModelLayers("UNet EMA", 686)
 
-    def load_checkpoint(self, filename):
+    def load_checkpoint(self, filename, unsafe=False):
         self.filename = filename
-        checkpoint_data = torch.load(filename, map_location="cpu")
+
+        checkpoint_data = torch.load(filename)
+
         state_dict = checkpoint_data["state_dict"] if 'state_dict' in checkpoint_data.keys() else checkpoint_data
         key_tree = treeify(state_dict.keys())
 
         if "cond_stage_model" in key_tree:
             # The Novel AI ckpt skips the text_model part
             clip_base_key = "cond_stage_model.transformer.text_model." if "text_model" in key_tree["cond_stage_model"]["transformer"] else "cond_stage_model.transformer."
-            self.clip_text_encoder_layers.set_from_state_dict(state_dict, clip_base_key)
+            self.clip_text_encoder_layers.set_from_state_dict(state_dict, clip_base_key, prepend="text_model.")
 
         if "first_stage_model" in key_tree:
             if "encoder" in key_tree["first_stage_model"]:
-                self.vae_encoder_layers.set_from_state_dict(state_dict, "first_stage_model.encoder.")
+                self.vae_encoder_layers.set_from_state_dict(state_dict, "first_stage_model.encoder.", prepend="encoder")
+                self.vae_encoder_layers["quant_conv.bias"] = state_dict["first_stage_model.quant_conv.bias"]
+                self.vae_encoder_layers["quant_conv.weight"] = state_dict["first_stage_model.quant_conv.weight"]
 
             if "decoder" in key_tree["first_stage_model"]:
-                self.vae_decoder_layers.set_from_state_dict(state_dict, "first_stage_model.decoder.")
+                self.vae_decoder_layers.set_from_state_dict(state_dict, "first_stage_model.decoder.", prepend="decoder.")
+                self.vae_decoder_layers["post_quant_conv.bias"] = state_dict["first_stage_model.post_quant_conv.bias"]
+                self.vae_decoder_layers["post_quant_conv.weight"] = state_dict["first_stage_model.post_quant_conv.weight"]
 
         if "model" in key_tree and "diffusion_model" in key_tree["model"]:
             self.unet_layers.set_from_state_dict(state_dict, "model.diffusion_model.")
@@ -170,10 +192,10 @@ class StableDiffusionModelData:
     def load_diffusers(self, directory):
         self.filename = directory
 
-        clip_text_encoder_layers = torch.load(os.path.join(directory, "text_encoder", "pytorch_model.bin"), map_location='cpu')
+        clip_text_encoder_layers = torch_load(os.path.join(directory, "text_encoder", "pytorch_model.bin"), map_location='cpu')
         self.clip_text_encoder_layers.set_from_state_dict(clip_text_encoder_layers, "text_model.")
 
-        vae_layers = torch.load(os.path.join(directory, "vae", "diffusion_pytorch_model.bin"), map_location='cpu')
+        vae_layers = torch_load(os.path.join(directory, "vae", "diffusion_pytorch_model.bin"), map_location='cpu')
 
         self.vae_decoder_layers.set_from_state_dict(vae_layers, "decoder.", diffusers_mappings.vae_encoder)
         # These layers have the correct number of elements, but coem in a different shape
@@ -189,16 +211,16 @@ class StableDiffusionModelData:
         self.vae_encoder_layers['mid.attn_1.q.weight'] = self.vae_encoder_layers['mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
         self.vae_encoder_layers['mid.attn_1.v.weight'] = self.vae_encoder_layers['mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
 
-        unet_layers = torch.load(os.path.join(directory, "unet", "diffusion_pytorch_model.bin"), map_location='cpu')
+        unet_layers = torch_load(os.path.join(directory, "unet", "diffusion_pytorch_model.bin"), map_location='cpu')
         self.unet_layers.set_from_state_dict(unet_layers, "", diffusers_mappings.unet)
 
         return self
 
     def save_native(self):
-        if len(self.clip_text_encoder_layers):
-            filename = "data/clip-text-encoder/" + self.clip_text_encoder_layers.content_hash + "-" + self.clip_text_encoder_layers.version_hash + "-" + self.clip_text_encoder_layers.dtypes + ".bin"
-            if not os.path.exists(filename):
-                self.clip_text_encoder_layers.save(filename)
+        # if len(self.clip_text_encoder_layers):
+        #     filename = "data/clip-text-encoder/" + self.clip_text_encoder_layers.content_hash + "-" + self.clip_text_encoder_layers.version_hash + "-" + self.clip_text_encoder_layers.dtypes + ".bin"
+        #     if not os.path.exists(filename):
+        #         self.clip_text_encoder_layers.save(filename)
 
         if len(self.vae_encoder_layers):
             filename = "data/vae-encoder/" + self.vae_encoder_layers.content_hash + "-" + self.vae_encoder_layers.version_hash + "-" + self.vae_encoder_layers.dtypes + ".bin"
@@ -209,12 +231,13 @@ class StableDiffusionModelData:
             filename = "data/vae-decoder/" + self.vae_decoder_layers.content_hash + "-" + self.vae_decoder_layers.version_hash + "-" + self.vae_decoder_layers.dtypes + ".bin"
             if not os.path.exists(filename):
                 self.vae_decoder_layers.save(filename)
+            # print('"' + os.path.split(self.filename)[1][0:-5] + '": "' + filename + '",')
 
         if len(self.unet_ema_layers):
             filename = "data/unet/" + self.unet_ema_layers.content_hash + "-" + self.unet_ema_layers.version_hash + "-" + self.unet_ema_layers.dtypes + ".bin"
             if not os.path.exists(filename):
                 self.unet_ema_layers.save(filename)
-            print('"' + os.path.split(self.filename)[1][0:-5] + '": "' + filename + '",')
+            # print('"' + os.path.split(self.filename)[1][0:-5] + '": "' + filename + '",')
         elif len(self.unet_layers):
             filename = "data/unet/" + self.unet_layers.content_hash + "-" + self.unet_layers.version_hash + "-" + self.unet_layers.dtypes + ".bin"
             if not os.path.exists(filename):
@@ -270,12 +293,16 @@ def main():
     # torch.save(diff, "diff.bin")
     #print(diff)
 
-    for checkpoint_filename in glob.glob("data/checkpoints/*.ckpt"):
+    for checkpoint_filename in glob.glob("import/checkpoints/*.ckpt"):
         data = StableDiffusionModelData()
         data.load_checkpoint(checkpoint_filename)
-        # print(data)
-        # print()
-        data.save_native()
+        try:
+
+            # print(data)
+            # print()
+            data.save_native()
+        except Exception as exception:
+            print(checkpoint_filename, " cannot be loaded safely", exception)
 
 if __name__ == "__main__":
     main()

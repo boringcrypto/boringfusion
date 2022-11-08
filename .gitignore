@@ -1,6 +1,14 @@
 __pycache__
 .gitattributes
-/data
+/core/data/clip-transformer/pytorch_model.bin
+/data/*.bin
+/data/*.ckpt
+/data/unet/*
+/data/vae-decoder/*
+/data/vae-encoder/*
+/data/clip-encoder/*
+/import/checkpoints/*
+/import/diffusers/*
 /outputs
 /htmlcov
 .coverage

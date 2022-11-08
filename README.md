@@ -19,7 +19,9 @@ CodeExplode Nerfy#5590 - Scigyric#8427
 
 # Cool resources
 - https://upscale.wiki/wiki/Model_Database
-
+- https://rentry.co/sdmodels
+- https://rentry.co/sdupdates
+- https://rentry.org/lftbl
 
 # Learnings
 

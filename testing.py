@@ -1,8 +1,8 @@
 import os
 from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
 from modules.clip import CLIPEmbedder, EmbeddingBuilder
-from modules.latent_decoder import LatentDecoder
-from data import ModelLayers
+from modules.vae_decoder import VAEDecoder
+from data import ModelLayers, StableDiffusionModelData
 from modules.stable_diffusion import StableDiffusion
 import unet_mapping
 
@@ -16,13 +16,13 @@ def save_images(samples):
         base_count += 1
 
 def main():
-    wd = ModelLayers.load(unet_mapping.map["v1-5-pruned-emaonly"])
-    model = StableDiffusion().half()
-    model.diffusion_model.load_state_dict(wd)
-    model.diffusion_model.eval()
-    model.eval().cuda()
+    # wd = ModelLayers.load(unet_mapping.map["v1-5-pruned-emaonly"])
+    sd = StableDiffusionModelData().load_checkpoint("import/checkpoints/sd-v1-4.ckpt")
+    model = StableDiffusion(sd.unet_layers)
+    model.cuda()
+    # model.to(memory_format=torch.channels_last)    
 
-    decoder = LatentDecoder().cuda()
+    decoder = VAEDecoder(sd.vae_decoder_layers)
 
     seed = 45
 
@@ -39,15 +39,15 @@ def main():
     prompt.add_prompt("in a lush forest")
     prompt.add_prompt(", by national geographic", weight = 1.3)
 
-    for i in range(10):
+    for i in range(1):
         samples = EulerASampler(model).sample(
             seed,
-            512, 512, 1,
+            512, 708, 1,
             prompt.embedding, 
             empty_prompt, 7.5, 20
         )
 
-        images = decoder.latents_to_images(samples)
+        images = decoder(samples)
 
         save_images(images)
 

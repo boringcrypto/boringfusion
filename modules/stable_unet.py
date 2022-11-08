@@ -251,11 +251,6 @@ class UNetModel(nn.Module):
         legacy=False,
     ):
         super().__init__()
-        if context_dim is not None:
-            from omegaconf.listconfig import ListConfig
-            if type(context_dim) == ListConfig:
-                context_dim = list(context_dim)
-
         if num_heads_upsample == -1:
             num_heads_upsample = num_heads
 
@@ -465,7 +460,7 @@ class UNetModel(nn.Module):
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
         hs = []
-        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False).half()
+        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
         emb = self.time_embed(t_emb)
 
         if self.num_classes is not None:

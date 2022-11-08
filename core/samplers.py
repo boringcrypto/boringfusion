@@ -82,7 +82,7 @@ RANDOM_SEED = -1
 
 def load_img(path):
     image = Image.open(path).convert("RGB")
-    image = np.array(image).astype(np.float16) / 255.0
+    image = np.array(image).astype(np.float32) / 255.0
     image = image[None].transpose(0, 3, 1, 2)
     image = torch.from_numpy(image)
     return 2.*image - 1.
@@ -124,8 +124,7 @@ class Sampler(BoringModule):
         prompt = prompt.to(self.device)
         negative_prompt = negative_prompt.to(self.device)
 
-        with torch.autocast("cuda", torch.float16):
-            samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
+        samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
         return samples
 
     @torch.no_grad()

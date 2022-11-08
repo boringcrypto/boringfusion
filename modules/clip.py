@@ -1,21 +1,28 @@
 from typing import List
+import os
 import torch
 import torch.nn as nn
 from transformers import CLIPTokenizer, CLIPTextModel
 
 from .util import BoringModule, should_run_on_gpu
 
+TRANSFORMER_STATE_DICT_PATH = "core/data/clip-transformer/pytorch_model.bin"
+
 class CLIPEmbedder(BoringModule):
-    def __init__(self):
+    def __init__(self, layers=None):
         """The CLIPEmbedder turns prompts into 77 tokens with 768 dimensions for use with Stable Diffusion.
         By default the model will live in CPU memory and will be moved onto the GPU only while needed. After you
         call `.cuda()` it will live in GPU memory until manually moved back.
         """
         super().__init__()
         # The tokenizer has a vocabulary of 49407 tokens and runs on the cpu (not a module). Small memory footprint (few MB).
-        self.tokenizer = CLIPTokenizer.from_pretrained("data/clip-tokenizer", local_files_only=True)
+        self.tokenizer = CLIPTokenizer.from_pretrained("core/data/clip-tokenizer", local_files_only=True)
         # The transformer is a module of about 480MB.
-        self.transformer = CLIPTextModel.from_pretrained("data/clip-transformer", local_files_only=True).eval()
+        download = layers is None and not os.path.exists(TRANSFORMER_STATE_DICT_PATH)
+
+        self.transformer = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14" if download else "core/data/clip-transformer", state_dict=layers, local_files_only=not download).eval()
+        if download:
+            self.save_default_transformer()            
         for parameter in self.transformer.parameters():
             parameter.requires_grad = False
 
@@ -25,6 +32,9 @@ class CLIPEmbedder(BoringModule):
         self.position_embeddings = self.transformer.text_model.embeddings.position_embedding(position_ids)        
 
         self.vocab = {value:key for (key,value) in self.tokenizer.get_vocab().items()}
+
+    def save_default_transformer(self):
+        torch.save(self.transformer.state_dict(), TRANSFORMER_STATE_DICT_PATH)
 
     @should_run_on_gpu
     @torch.no_grad()

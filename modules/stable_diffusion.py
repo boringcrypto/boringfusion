@@ -1,21 +1,16 @@
 import torch
-from .latent_decoder import LatentDecoder
-
-import torch
 import numpy as np
 import pytorch_lightning as pl
 from functools import partial
 
-from .util import BoringModuleMixin, disabled_train, make_beta_schedule, should_run_on_gpu
+from .util import BoringModuleMixin, make_beta_schedule
 from .stable_unet import UNetModel
-from einops import rearrange
-from PIL import Image
 
 
 class StableDiffusion(pl.LightningModule, BoringModuleMixin):
-    def __init__(self):
+    def __init__(self, layers=None, use_fp16=False):
         super().__init__()
-        self.diffusion_model = UNetModel(use_fp16=True)
+        self.diffusion_model = UNetModel(use_fp16=use_fp16)
 
         betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
         alphas = 1. - betas
@@ -25,11 +20,16 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
 
-        to_torch = partial(torch.tensor, dtype=torch.float16)
+        to_torch = partial(torch.tensor, dtype=torch.float32)
 
         self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
         self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
+
+        if layers is not None:
+            self.diffusion_model.load_state_dict(layers)
+        
+        self.eval()
 
     def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):
         x = x.to(self.device)
