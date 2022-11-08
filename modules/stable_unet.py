@@ -175,11 +175,10 @@ class ResBlock(TimestepBlock):
 
     def forward(self, x, emb):
         if self.updown:
-            in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
-            h = in_rest(x)
+            h = self.in_layers[:-1](x)
             h = self.h_upd(h)
             x = self.x_upd(x)
-            h = in_conv(h)
+            h = self.in_layers[-1](h)
         else:
             h = self.in_layers(x)
         emb_out = self.emb_layers(emb).type(h.dtype)
@@ -462,13 +461,13 @@ class UNetModel(nn.Module, BoringModuleMixin):
         hs = []
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False, dtype=self.dtype, device=self.device)
         emb = self.time_embed(t_emb)
-        context = context.type(self.dtype)
+        context = context.to(device=self.device, dtype=self.dtype)
 
         if self.num_classes is not None:
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
-        h = x.type(self.dtype)
+        h = x.to(device=self.device, dtype=self.dtype)
         for module in self.input_blocks:
             h = module(h, emb, context)
             hs.append(h)

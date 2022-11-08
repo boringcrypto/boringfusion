@@ -22,7 +22,7 @@ def main():
 
     print("Creating UNet")
     model = StableDiffusion(sd.unet_layers, use_fp16=True, device="cuda")
-    model.cuda()
+    # model.cuda()
     # model.to(memory_format=torch.channels_last)    
 
     print("Creating VAE Decoder")
@@ -46,17 +46,14 @@ def main():
 
     print("Sampling")
     for i in range(6):
-        samples = EulerASampler(model).sample(
+        sample = EulerASampler(model).sample(
             seed,
             512, 512, 1,
             prompt.embedding, 
             empty_prompt, 7.5, 20
         )
 
-        print(samples.dtype)
-
-        images = decoder(samples.type(torch.float32))
-
+        images = decoder(sample.type(torch.float32))
         save_images(images)
 
 if __name__ == "__main__":
