@@ -17,15 +17,20 @@ def save_images(samples):
 
 def main():
     # wd = ModelLayers.load(unet_mapping.map["v1-5-pruned-emaonly"])
+    print("Loading checkpoint")
     sd = StableDiffusionModelData().load_checkpoint("import/checkpoints/sd-v1-4.ckpt")
-    model = StableDiffusion(sd.unet_layers, use_fp16=True)
+
+    print("Creating UNet")
+    model = StableDiffusion(sd.unet_layers, use_fp16=True, device="cuda")
     model.cuda()
     # model.to(memory_format=torch.channels_last)    
 
+    print("Creating VAE Decoder")
     decoder = VAEDecoder(sd.vae_decoder_layers)
 
     seed = 45
 
+    print("Creating CLIP Embedder")
     clip = CLIPEmbedder()
     empty_prompt = clip([""])
 
@@ -39,6 +44,7 @@ def main():
     prompt.add_prompt("in a lush forest")
     prompt.add_prompt(", by national geographic", weight = 1.3)
 
+    print("Sampling")
     for i in range(6):
         samples = EulerASampler(model).sample(
             seed,

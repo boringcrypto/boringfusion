@@ -20,7 +20,13 @@ class CLIPEmbedder(BoringModule):
         # The transformer is a module of about 480MB.
         download = layers is None and not os.path.exists(TRANSFORMER_STATE_DICT_PATH)
 
-        self.transformer = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14" if download else "core/data/clip-transformer", state_dict=layers, local_files_only=not download).eval()
+        if download:
+            print("Downloading CLIP Embedder from HuggingFace")
+        self.transformer = CLIPTextModel.from_pretrained(
+                "openai/clip-vit-large-patch14" if download else "core/data/clip-transformer", 
+                state_dict=layers, 
+                local_files_only=not download
+            ).eval()
         if download:
             self.save_default_transformer()            
         for parameter in self.transformer.parameters():

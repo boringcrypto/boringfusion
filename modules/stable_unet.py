@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .util import conv_nd, linear, zero_module, normalization, timestep_embedding, DummyModule
+from .util import conv_nd, linear, zero_module, normalization, timestep_embedding, DummyModule, BoringModuleMixin
 from .attention import SpatialTransformer
 
 
@@ -47,14 +47,14 @@ class Upsample(nn.Module):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1, dtype=torch.float32):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1, dtype=torch.float32, device="cuda"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.dims = dims
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding, dtype=dtype)
+            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding, dtype=dtype, device=device)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -77,7 +77,7 @@ class Downsample(nn.Module):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1, dtype=torch.float32):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1, dtype=torch.float32, device="cuda"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -85,7 +85,7 @@ class Downsample(nn.Module):
         self.dims = dims
         stride = 2 if dims != 3 else (1, 2, 2)
         self.op = conv_nd(
-            dims, self.channels, self.out_channels, 3, stride=stride, padding=padding, dtype=dtype
+            dims, self.channels, self.out_channels, 3, stride=stride, padding=padding, dtype=dtype, device=device
         )
 
     def forward(self, x):
@@ -98,7 +98,6 @@ class ResBlock(TimestepBlock):
     A residual block that can optionally change the number of channels.
     :param channels: the number of input channels.
     :param emb_channels: the number of timestep embedding channels.
-    :param dropout: the rate of dropout.
     :param out_channels: if specified, the number of out channels.
     :param use_conv: if True and out_channels is specified, use a spatial
         convolution instead of a smaller 1x1 convolution to change the
@@ -113,7 +112,6 @@ class ResBlock(TimestepBlock):
         self,
         channels,
         emb_channels,
-        dropout,
         out_channels=None,
         use_conv=False,
         use_scale_shift_norm=False,
@@ -121,31 +119,31 @@ class ResBlock(TimestepBlock):
         use_checkpoint=False,
         up=False,
         down=False,
-        dtype=torch.float32
+        dtype=torch.float32,
+        device="cuda"
     ):
         super().__init__()
         self.channels = channels
         self.emb_channels = emb_channels
-        self.dropout = dropout
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.use_checkpoint = use_checkpoint
         self.use_scale_shift_norm = use_scale_shift_norm
 
         self.in_layers = nn.Sequential(
-            normalization(channels),
+            normalization(channels, device=device),
             nn.SiLU(),
-            conv_nd(dims, channels, self.out_channels, 3, padding=1, dtype=dtype),
+            conv_nd(dims, channels, self.out_channels, 3, padding=1, dtype=dtype, device=device),
         )
 
         self.updown = up or down
 
         if up:
-            self.h_upd = Upsample(channels, False, dims, dtype=dtype)
-            self.x_upd = Upsample(channels, False, dims, dtype=dtype)
+            self.h_upd = Upsample(channels, False, dims, dtype=dtype, device=device)
+            self.x_upd = Upsample(channels, False, dims, dtype=dtype, device=device)
         elif down:
-            self.h_upd = Downsample(channels, False, dims, dtype=dtype)
-            self.x_upd = Downsample(channels, False, dims, dtype=dtype)
+            self.h_upd = Downsample(channels, False, dims, dtype=dtype, device=device)
+            self.x_upd = Downsample(channels, False, dims, dtype=dtype, device=device)
         else:
             self.h_upd = self.x_upd = nn.Identity()
 
@@ -154,15 +152,15 @@ class ResBlock(TimestepBlock):
             linear(
                 emb_channels,
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
-                dtype=dtype
+                dtype=dtype, device=device
             ),
         )
         self.out_layers = nn.Sequential(
-            normalization(self.out_channels),
+            normalization(self.out_channels, device=device),
             nn.SiLU(),
             DummyModule(),
             zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, dtype=dtype)
+                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, dtype=dtype, device=device)
             ),
         )
 
@@ -170,10 +168,10 @@ class ResBlock(TimestepBlock):
             self.skip_connection = nn.Identity()
         elif use_conv:
             self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1, dtype=dtype
+                dims, channels, self.out_channels, 3, padding=1, dtype=dtype, device=device
             )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, dtype=dtype)
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, dtype=dtype, device=device)
 
     def forward(self, x, emb):
         if self.updown:
@@ -199,7 +197,7 @@ class ResBlock(TimestepBlock):
 
 
 
-class UNetModel(nn.Module):
+class UNetModel(nn.Module, BoringModuleMixin):
     """
     The full UNet model with attention and timestep embedding.
     :param in_channels: channels in the input Tensor.
@@ -210,7 +208,6 @@ class UNetModel(nn.Module):
         attention will take place. May be a set, list, or tuple.
         For example, if this contains 4, then at 4x downsampling, attention
         will be used.
-    :param dropout: the dropout probability.
     :param channel_mult: channel multiplier for each level of the UNet.
     :param conv_resample: if True, use learned convolutions for upsampling and
         downsampling.
@@ -235,7 +232,6 @@ class UNetModel(nn.Module):
         out_channels=4,
         num_res_blocks=2,
         attention_resolutions=[4, 2, 1],
-        dropout=0,
         channel_mult=[1, 2, 4, 4],
         conv_resample=True,
         dims=2,
@@ -251,6 +247,7 @@ class UNetModel(nn.Module):
         context_dim=768,                 # custom transformer support
         n_embed=None,                     # custom support for prediction of discrete ids into codebook of first stage vq model
         legacy=False,
+        device="cuda"
     ):
         super().__init__()
         if num_heads_upsample == -1:
@@ -267,7 +264,6 @@ class UNetModel(nn.Module):
         self.out_channels = out_channels
         self.num_res_blocks = num_res_blocks
         self.attention_resolutions = attention_resolutions
-        self.dropout = dropout
         self.channel_mult = channel_mult
         self.conv_resample = conv_resample
         self.num_classes = num_classes
@@ -280,18 +276,18 @@ class UNetModel(nn.Module):
 
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
-            linear(model_channels, time_embed_dim, dtype=self.dtype),
+            linear(model_channels, time_embed_dim, dtype=self.dtype, device=device),
             nn.SiLU(),
-            linear(time_embed_dim, time_embed_dim, dtype=self.dtype),
+            linear(time_embed_dim, time_embed_dim, dtype=self.dtype, device=device),
         )
 
         if self.num_classes is not None:
-            self.label_emb = nn.Embedding(num_classes, time_embed_dim, dtype=self.dtype)
+            self.label_emb = nn.Embedding(num_classes, time_embed_dim, dtype=self.dtype, device=device)
 
         self.input_blocks = nn.ModuleList(
             [
                 TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1, dtype=self.dtype)
+                    conv_nd(dims, in_channels, model_channels, 3, padding=1, dtype=self.dtype, device=device)
                 )
             ]
         )
@@ -305,12 +301,12 @@ class UNetModel(nn.Module):
                     ResBlock(
                         ch,
                         time_embed_dim,
-                        dropout,
                         out_channels=mult * model_channels,
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
-                        dtype=self.dtype
+                        dtype=self.dtype,
+                        device=device
                     )
                 ]
                 ch = mult * model_channels
@@ -326,7 +322,7 @@ class UNetModel(nn.Module):
 
                     layers.append(
                         SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype
+                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -339,17 +335,17 @@ class UNetModel(nn.Module):
                         ResBlock(
                             ch,
                             time_embed_dim,
-                            dropout,
                             out_channels=out_ch,
                             dims=dims,
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
-                            dtype=self.dtype
+                            dtype=self.dtype,
+                            device=device
                         )
                         if resblock_updown
                         else Downsample(
-                            ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype
+                            ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype, device=device
                         )
                     )
                 )
@@ -370,23 +366,21 @@ class UNetModel(nn.Module):
             ResBlock(
                 ch,
                 time_embed_dim,
-                dropout,
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
-                dtype=self.dtype
+                dtype=self.dtype, device=device
             ),
             SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype
+                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
                         ),
             ResBlock(
                 ch,
                 time_embed_dim,
-                dropout,
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
-                dtype=self.dtype
+                dtype=self.dtype, device=device
             ),
         )
         self._feature_size += ch
@@ -399,12 +393,11 @@ class UNetModel(nn.Module):
                     ResBlock(
                         ch + ich,
                         time_embed_dim,
-                        dropout,
                         out_channels=model_channels * mult,
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
-                        dtype=self.dtype
+                        dtype=self.dtype, device=device
                     )
                 ]
                 ch = model_channels * mult
@@ -419,7 +412,7 @@ class UNetModel(nn.Module):
                         dim_head = ch // num_heads
                     layers.append(
                         SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype
+                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
                         )
                     )
                 if level and i == num_res_blocks:
@@ -428,30 +421,29 @@ class UNetModel(nn.Module):
                         ResBlock(
                             ch,
                             time_embed_dim,
-                            dropout,
                             out_channels=out_ch,
                             dims=dims,
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             up=True,
-                            dtype=self.dtype
+                            dtype=self.dtype, device=device
                         )
                         if resblock_updown
-                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype)
+                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype, device=device)
                     )
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
                 self._feature_size += ch
 
         self.out = nn.Sequential(
-            normalization(ch),
+            normalization(ch, device=device),
             nn.SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1, dtype=self.dtype)),
+            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1, dtype=self.dtype, device=device)),
         )
         if self.predict_codebook_ids:
             self.id_predictor = nn.Sequential(
-            normalization(ch),
-            conv_nd(dims, model_channels, n_embed, 1, dtype=self.dtype),
+            normalization(ch, device=device),
+            conv_nd(dims, model_channels, n_embed, 1, dtype=self.dtype, device=device),
             #nn.LogSoftmax(dim=1)  # change to cross_entropy and produce non-normalized logits
         )
 
@@ -468,7 +460,7 @@ class UNetModel(nn.Module):
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
         hs = []
-        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False, dtype=self.dtype)
+        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False, dtype=self.dtype, device=self.device)
         emb = self.time_embed(t_emb)
         context = context.type(self.dtype)
 

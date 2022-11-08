@@ -15,9 +15,9 @@ from .util import exists, default, zero_module
 
 # feedforward
 class GEGLU(nn.Module):
-    def __init__(self, dim_in, dim_out, dtype):
+    def __init__(self, dim_in, dim_out, dtype, device):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out * 2, dtype=dtype)
+        self.proj = nn.Linear(dim_in, dim_out * 2, dtype=dtype, device=device)
 
     def forward(self, x):
         x, gate = self.proj(x).chunk(2, dim=-1)
@@ -25,31 +25,31 @@ class GEGLU(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim, dim_out=None, mult=4, glu=False, dropout=0., dtype=torch.float32):
+    def __init__(self, dim, dim_out=None, mult=4, glu=False, dtype=torch.float32, device="cuda"):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = default(dim_out, dim)
         project_in = nn.Sequential(
             nn.Linear(dim, inner_dim),
             nn.GELU()
-        ) if not glu else GEGLU(dim, inner_dim, dtype)
+        ) if not glu else GEGLU(dim, inner_dim, dtype, device=device)
 
         self.net = nn.Sequential(
             project_in,
             DummyModule(),
-            nn.Linear(inner_dim, dim_out, dtype=dtype)
+            nn.Linear(inner_dim, dim_out, dtype=dtype, device=device)
         )
 
     def forward(self, x):
         return self.net(x)
 
 
-def Normalize(in_channels, dtype):
-    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True, dtype=dtype)
+def Normalize(in_channels, dtype, device):
+    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True, dtype=dtype, device=device)
 
 
 class CrossAttention(nn.Module):
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0., dtype=torch.float32):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dtype=torch.float32, device="cuda"):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
@@ -57,12 +57,12 @@ class CrossAttention(nn.Module):
         self.scale = dim_head ** -0.5
         self.heads = heads
 
-        self.to_q = nn.Linear(query_dim, inner_dim, bias=False, dtype=dtype)
-        self.to_k = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype)
-        self.to_v = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype)
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False, dtype=dtype, device=device)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype, device=device)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype, device=device)
 
         self.to_out = nn.Sequential(
-            nn.Linear(inner_dim, query_dim, dtype=dtype),
+            nn.Linear(inner_dim, query_dim, dtype=dtype, device=device),
         )
 
     def forward(self, x, context=None, mask=None):
@@ -92,7 +92,7 @@ class CrossAttention(nn.Module):
 
 
 class MemoryEfficientCrossAttention(nn.Module):
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0, dtype=torch.float32):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dtype=torch.float32, device="cuda"):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
@@ -100,11 +100,11 @@ class MemoryEfficientCrossAttention(nn.Module):
         self.heads = heads
         self.dim_head = dim_head
 
-        self.to_q = nn.Linear(query_dim, inner_dim, bias=False, dtype=dtype)
-        self.to_k = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype)
-        self.to_v = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype)
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False, dtype=dtype, device=device)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype, device=device)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias=False, dtype=dtype, device=device)
 
-        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim, dtype=dtype), nn.Dropout(dropout))
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim, dtype=dtype, device=device))
         self.attention_op: Optional[Any] = None
 
     def forward(self, x, context=None, mask=None):
@@ -138,16 +138,16 @@ class MemoryEfficientCrossAttention(nn.Module):
         return self.to_out(out)
 
 class BasicTransformerBlock(nn.Module):
-    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True, dtype=torch.float32):
+    def __init__(self, dim, n_heads, d_head, context_dim=None, gated_ff=True, checkpoint=True, dtype=torch.float32, device="cuda"):
         super().__init__()
         cross_attention_class = MemoryEfficientCrossAttention if xformers_loaded else CrossAttention
-        self.attn1 = cross_attention_class(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout, dtype=dtype)  # is a self-attention
-        self.ff = FeedForward(dim, dropout=dropout, glu=gated_ff, dtype=dtype)
+        self.attn1 = cross_attention_class(query_dim=dim, heads=n_heads, dim_head=d_head, dtype=dtype, device=device)  # is a self-attention
+        self.ff = FeedForward(dim, glu=gated_ff, dtype=dtype, device=device)
         self.attn2 = cross_attention_class(query_dim=dim, context_dim=context_dim,
-                                    heads=n_heads, dim_head=d_head, dropout=dropout, dtype=dtype)  # is self-attn if context is none
-        self.norm1 = nn.LayerNorm(dim, dtype=dtype)
-        self.norm2 = nn.LayerNorm(dim, dtype=dtype)
-        self.norm3 = nn.LayerNorm(dim, dtype=dtype)
+                                    heads=n_heads, dim_head=d_head, dtype=dtype, device=device)  # is self-attn if context is none
+        self.norm1 = nn.LayerNorm(dim, dtype=dtype, device=device)
+        self.norm2 = nn.LayerNorm(dim, dtype=dtype, device=device)
+        self.norm3 = nn.LayerNorm(dim, dtype=dtype, device=device)
         self.checkpoint = checkpoint
 
     def forward(self, x, context=None):
@@ -166,22 +166,23 @@ class SpatialTransformer(nn.Module):
     Finally, reshape to image
     """
     def __init__(self, in_channels, n_heads, d_head,
-                 depth=1, dropout=0., context_dim=None, dtype=torch.float32):
+                 depth=1, context_dim=None, dtype=torch.float32, device="cuda"):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
-        self.norm = Normalize(in_channels, dtype)
+        self.norm = Normalize(in_channels, dtype, device=device)
 
         self.proj_in = nn.Conv2d(in_channels,
                                  inner_dim,
                                  kernel_size=1,
                                  stride=1,
                                  padding=0,
-                                 dtype=dtype
+                                 dtype=dtype,
+                                 device=device
                                  )
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim, dtype=dtype)
+            [BasicTransformerBlock(inner_dim, n_heads, d_head, context_dim=context_dim, dtype=dtype, device=device)
                 for d in range(depth)]
         )
 
@@ -190,7 +191,8 @@ class SpatialTransformer(nn.Module):
                                               kernel_size=1,
                                               stride=1,
                                               padding=0,
-                                              dtype=dtype))
+                                              dtype=dtype,
+                                              device=device))
 
     def forward(self, x, context=None):
         # note: if no context is given, cross-attention defaults to self-attention

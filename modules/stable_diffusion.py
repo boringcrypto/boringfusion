@@ -8,10 +8,12 @@ from .stable_unet import UNetModel
 
 
 class StableDiffusion(pl.LightningModule, BoringModuleMixin):
-    def __init__(self, layers=None, use_fp16=False):
+    def __init__(self, layers=None, use_fp16=False, device="cuda"):
         super().__init__()
-        self.diffusion_model = UNetModel(use_fp16=use_fp16)
+        print("Creating UNet")
+        self.diffusion_model = UNetModel(use_fp16=use_fp16, device=device)
 
+        print("Making schedule")
         betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
         alphas = 1. - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)
@@ -20,15 +22,17 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
 
-        to_torch = partial(torch.tensor, dtype=self.dtype)
+        to_torch = partial(torch.tensor, dtype=self.dtype, device=device)
 
         self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
         self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
 
+        print("Loading State")
         if layers is not None:
             self.diffusion_model.load_state_dict(layers)
         
+        print("Setting eval")
         self.eval()
 
     def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):

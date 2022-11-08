@@ -57,7 +57,7 @@ def zero_module(module):
     return module
 
 
-def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False, dtype=torch.float32):
+def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False, dtype=torch.float32, device="cuda"):
     """
     Create sinusoidal timestep embeddings.
     :param timesteps: a 1-D Tensor of N indices, one per batch element.
@@ -77,16 +77,16 @@ def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False, dtyp
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     else:
         embedding = repeat(timesteps, 'b -> b d', d=dim)
-    return embedding.to(dtype=dtype)
+    return embedding.to(dtype=dtype, device=device)
 
 
-def normalization(channels):
+def normalization(channels, device):
     """
     Make a standard normalization layer.
     :param channels: number of input channels.
     :return: an nn.Module for normalization.
     """
-    return GroupNorm32(32, channels)
+    return GroupNorm32(32, channels, device=device)
 
 
 class GroupNorm32(nn.GroupNorm):
