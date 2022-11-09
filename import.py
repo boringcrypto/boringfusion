@@ -1,7 +1,6 @@
 import glob
 from core.data import StableDiffusionData
 
-
 def main():
     for diffusers_directory in glob.glob("import/diffusers/*"):
         data = StableDiffusionData()

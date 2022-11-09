@@ -15,7 +15,7 @@
 #     if not found:
 #         print("'" + key_diff + "': '???',")
 
-vae_encoder = {
+vae_decoder = {
     'conv_in.bias': 'conv_in.bias',
     'conv_in.weight': 'conv_in.weight',
     'conv_norm_out.bias': 'norm_out.bias',
@@ -156,7 +156,7 @@ vae_encoder = {
     'up_blocks.3.resnets.2.norm2.weight': 'up.0.block.2.norm2.weight'    
 }
 
-vae_decoder = {
+vae_encoder = {
     'conv_in.bias': 'conv_in.bias',
     'conv_in.weight': 'conv_in.weight',
     'conv_norm_out.bias': 'norm_out.bias',

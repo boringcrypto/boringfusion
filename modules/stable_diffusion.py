@@ -10,7 +10,6 @@ from .stable_unet import UNetModel
 class StableDiffusion(pl.LightningModule, BoringModuleMixin):
     def __init__(self, layers=None, use_fp16=False, device="cuda"):
         super().__init__()
-        print("Creating UNet")
         self.diffusion_model = UNetModel(use_fp16=use_fp16, device=device)
 
         print("Making schedule")

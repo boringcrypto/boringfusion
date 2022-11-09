@@ -2,9 +2,9 @@ import os
 from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
 from modules.clip import CLIPEmbedder, EmbeddingBuilder
 from modules.vae_decoder import VAEDecoder
-from import import ModelLayers, StableDiffusionModelData
+from core.data import ModelLayers
 from modules.stable_diffusion import StableDiffusion
-import unet_mapping
+import model_map
 
 import gc
 import torch
@@ -16,17 +16,16 @@ def save_images(samples):
         base_count += 1
 
 def main():
-    # wd = ModelLayers.load(unet_mapping.map["v1-5-pruned-emaonly"])
-    print("Loading checkpoint")
-    sd = StableDiffusionModelData().load_checkpoint("import/checkpoints/sd-v1-4.ckpt")
+    print("Loading UNet")
+    unet = ModelLayers.load(model_map.map("Stable Diffusion v1.5 EMA fp32"))
 
     print("Creating UNet")
-    model = StableDiffusion(sd.unet_layers, use_fp16=True, device="cuda")
-    # model.cuda()
+    model = StableDiffusion(unet, use_fp16=True, device="cuda")
     # model.to(memory_format=torch.channels_last)    
 
     print("Creating VAE Decoder")
-    decoder = VAEDecoder(sd.vae_decoder_layers)
+    decoder_layers = ModelLayers.load(model_map.map["8b7877f3"])
+    decoder = VAEDecoder(decoder_layers)
 
     seed = 45
 

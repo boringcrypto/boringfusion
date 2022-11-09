@@ -82,6 +82,8 @@ class ModelLayers(OrderedDict):
 
     @classmethod
     def load(cls, filename):
+        if isinstance(filename, ModelLayersInfo):
+            filename = filename.filename 
         data = torch_load(filename, map_location="cpu")
         model_layers = cls(data["name"], data["layer_count"])
         model_layers.set_from_state_dict(data["state_dict"])
@@ -131,3 +133,42 @@ class ModelLayers(OrderedDict):
             return self.name + ": " + self.content_hash + ":" + self.version_hash + " - " + self.dtypes + " - " + str(self.parameter_count // 1000000) + "M params"
         else:
             return self.name + ": None"
+
+
+class ModelMap(dict):
+    def __call__(self, name):
+        result = [model for model in self.values() if model.name == name]
+        if len(result):
+            return result[0]
+
+    def __repr__(self):
+        return "ModelMap({\n" + str.join(",\n", ['    "' + key + '": ' + str(value) for key, value in self.items()]) + "\n})"
+
+class ModelLayersInfo:
+    def __init__(self, model, name, filename, content_hash, version_hash, dtypes, parameter_count, info_url, download_url, description, found_in):
+        self.model = model
+        self.name = name
+        self.filename = filename
+        self.content_hash = content_hash
+        self.version_hash = version_hash
+        self.dtypes = dtypes
+        self.parameter_count = parameter_count
+        self.info_url = info_url
+        self.download_url = download_url
+        self.description = description
+        self.found_in = found_in
+
+    def __repr__(self):
+        return f"""ModelLayersInfo(
+        "{self.model}",
+        "{self.name}",
+        "{self.filename}",
+        "{self.content_hash}",
+        "{self.version_hash}",
+        "{self.dtypes}",
+        "{self.parameter_count}",
+        "{self.info_url}",
+        "{self.download_url}",
+        "{self.description}",
+        {self.found_in},
+    )"""
