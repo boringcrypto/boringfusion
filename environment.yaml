@@ -1,16 +1,18 @@
 name: boring
 channels:
+  - nvidia
   - pytorch
   - defaults
 dependencies:
   - python=3.10.6
   - pip=22.2.2
-  - cudatoolkit=11.3
-  - pytorch::pytorch=1.12.1
-  - torchvision=0.13.1
+  - cudatoolkit=11.7
+  - pytorch::pytorch=1.13.0
+  - torchvision=0.14.0
   - numpy=1.23.3
+  - pytorch-cuda=11.7
   - pip:
     - pytorch-lightning==1.8.0.post1
     - einops==0.5.0
-    - transformers==4.24.0
+    - transformers==4.19.2
     - k_diffusion==0.0.10

@@ -35,10 +35,21 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         print("Setting eval")
         self.eval()
 
+        # self.script = None
+
     def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):
-        x = x.to(self.device)
+        x = x.to(self.device, memory_format=torch.channels_last)
         t = t.to(self.device)
         cc = torch.cat(c_crossattn, 1).to(self.device)
+
+        # if self.script is None:
+        #     self.script = torch.jit.trace(self.diffusion_model.eval(), (x, t, cc))
+        #     self.script.eval()
+        #     self.script = torch.jit.optimize_for_inference(self.script)
+
+        #     self.script.save("unet.ts")
+
+            # self.script = torch.jit.load("unet.ts")
         out = self.diffusion_model(x, t, context=cc)
 
         return out

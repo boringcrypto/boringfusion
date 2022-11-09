@@ -2,7 +2,7 @@ import os
 from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
 from modules.clip import CLIPEmbedder, EmbeddingBuilder
 from modules.vae_decoder import VAEDecoder
-from data import ModelLayers, StableDiffusionModelData
+from import import ModelLayers, StableDiffusionModelData
 from modules.stable_diffusion import StableDiffusion
 import unet_mapping
 
@@ -34,20 +34,20 @@ def main():
     clip = CLIPEmbedder()
     empty_prompt = clip([""])
 
-    prompt = EmbeddingBuilder(clip)
-    prompt.add_prompt("award winning photo of a ")
-    prompt.add_combined_prompt(
-        ["shark", "dragon", "cat"],
-        [1.5, 1, 1]
-    )
-    # prompt.add_prompt("in the ocean")
-    prompt.add_prompt("in a lush forest")
-    prompt.add_prompt(", by national geographic", weight = 1.3)
-
     print("Sampling")
     for i in range(6):
+        prompt = EmbeddingBuilder(clip)
+        prompt.add_prompt("award winning photo of a ")
+        prompt.add_combined_prompt(
+            ["shark", "dragon", "cat"],
+            [1.5 * (i/6), 1, 1]
+        )
+        # prompt.add_prompt("in the ocean")
+        prompt.add_prompt("in a lush forest")
+        prompt.add_prompt(", by national geographic", weight = 1.3)
+
         sample = EulerASampler(model).sample(
-            seed,
+            seed + 1,
             512, 512, 1,
             prompt.embedding, 
             empty_prompt, 7.5, 20

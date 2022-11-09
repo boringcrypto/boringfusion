@@ -1,10 +1,6 @@
 import torch
-import pytorch_lightning as pl
 import torch.nn as nn
-import numpy as np
 from PIL import Image
-from core.pytorch_serialization import load
-from core.safe_unpickler import torch_load
 
 from .util import BoringModule, should_run_on_gpu
 
@@ -151,8 +147,14 @@ class Decoder(nn.Module):
         h = self.norm_out(h)
         h = nonlinearity(h)
         h = self.conv_out(h)
-        return h
+        # torchvision.ToPILImage only works on a single image, so here we prepare all images
+        # on the GPU all at once.
 
+        # Normalize from float between -1.0 and 1.0 to floats between 0.0 and 255.0
+        h = h.add_(1.0).mul_(127.5).clamp_(min=0.0, max=255.0).type(torch.uint8)
+        # swap from the dimensions for PIL
+        h = h.permute(0, 2, 3, 1)
+        return h
 
 class VAEDecoder(BoringModule):
     def __init__(self, layers=None):
@@ -162,6 +164,7 @@ class VAEDecoder(BoringModule):
         if layers is not None:
             self.load_state_dict(layers)
         self.eval()
+        # self.script = None
 
     @should_run_on_gpu
     @torch.no_grad()
@@ -171,15 +174,30 @@ class VAEDecoder(BoringModule):
 
         # Decode the image from latent space
         z = self.post_quant_conv(z)
+
+        # if self.script is None:
+        #     self.script = torch.jit.trace(self.decoder, z)
+        #     self.script.save("vae_decoder.ts")
+        #     torch.cuda.synchronize()
+
+        # import time
+        # start = torch.cuda.Event(enable_timing=True)
+        # end = torch.cuda.Event(enable_timing=True)
+        # for i in range(3):
+        #     start.record()
+        #     samples = self.decoder(z)
+        #     end.record()
+        #     torch.cuda.synchronize()
+        #     print("Normal", start.elapsed_time(end))
+
+        #     start.record()
+        #     samples = self.script(z)
+        #     end.record()
+        #     torch.cuda.synchronize()
+        #     print("Trace", start.elapsed_time(end))
+
         samples = self.decoder(z)
 
-        # torchvision.ToPILImage only works on a single image, so here we prepare all images
-        # on the GPU all at once.
-
-        # Normalize from float between -1.0 and 1.0 to floats between 0.0 and 255.0
-        samples = samples.add_(1.0).mul_(127.5).clamp_(min=0.0, max=255.0).type(torch.uint8)
-        # swap from the dimensions for PIL
-        samples = samples.permute(0, 2, 3, 1)
         # Move the samples to the cpu in into a numpy array
         samples = samples.cpu().numpy()
         
