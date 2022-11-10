@@ -102,6 +102,7 @@ class StableDiffusionData:
 
                 if layers.version_hash not in map:
                     map[layers.version_hash] = ModelLayersInfo(
+                        "",
                         layers.name,
                         self.filename,
                         filename,

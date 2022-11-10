@@ -17,17 +17,16 @@ def save_images(samples):
 
 def main():
     print("Loading UNet")
-    unet = ModelLayers.load(model_map.map("Stable Diffusion v1.5 EMA fp32"))
+    unet = ModelLayers.load("SD1.5-fp32").half_()
+    print("Loaded", unet.info.name)
 
     print("Creating UNet")
     model = StableDiffusion(unet, use_fp16=True, device="cuda")
-    # model.to(memory_format=torch.channels_last)    
 
     print("Creating VAE Decoder")
-    decoder_layers = ModelLayers.load(model_map.map["8b7877f3"])
-    decoder = VAEDecoder(decoder_layers)
+    decoder = VAEDecoder(ModelLayers.load("VAEDec1.4-fp32"))
 
-    seed = 45
+    seed = 42
 
     print("Creating CLIP Embedder")
     clip = CLIPEmbedder()
@@ -39,14 +38,13 @@ def main():
         prompt.add_prompt("award winning photo of a ")
         prompt.add_combined_prompt(
             ["shark", "dragon", "cat"],
-            [1.5 * (i/6), 1, 1]
+            [0.9 + (i/10), 1, 1]
         )
-        # prompt.add_prompt("in the ocean")
         prompt.add_prompt("in a lush forest")
         prompt.add_prompt(", by national geographic", weight = 1.3)
 
         sample = EulerASampler(model).sample(
-            seed + 1,
+            seed,
             512, 512, 1,
             prompt.embedding, 
             empty_prompt, 7.5, 20
