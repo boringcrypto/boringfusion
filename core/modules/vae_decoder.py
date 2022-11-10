@@ -158,6 +158,7 @@ class Decoder(nn.Module):
 
 class VAEDecoder(BoringModule):
     def __init__(self, layers=None):
+        # TODO: Pass in device and create directly on that device
         super().__init__()
         self.decoder = Decoder()
         self.post_quant_conv = torch.nn.Conv2d(4, 4, 1)
@@ -169,6 +170,8 @@ class VAEDecoder(BoringModule):
     @should_run_on_gpu
     @torch.no_grad()
     def forward(self, z):
+        # Make sure the dtype matches
+        z = z.type(self.decoder.conv_in.bias.dtype)
         # Scale by the fixed scale factor of the SD model
         z = 1. / 0.18215 * z # scale factor
 

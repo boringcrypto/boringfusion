@@ -42,6 +42,44 @@ class CLIPEmbedder(BoringModule):
     def save_default_transformer(self):
         torch.save(self.transformer.state_dict(), TRANSFORMER_STATE_DICT_PATH)
 
+    @torch.no_grad()
+    def embed(self, prompt, max_length=77, padding="max_length"):
+        tokenizer_output = self.tokenizer(
+            prompt, # the prompt or array of prompts to tokenize
+            truncation=True, # truncate if longer than 77 tokens
+            max_length=max_length, # Stable Diffusion uses 77 tokens
+            padding=padding, # No padding
+            return_tensors="pt" # Return pytorch tensor
+        )
+        return self.token_embedding(tokenizer_output.input_ids.to(device=self.device))
+
+    @should_run_on_gpu
+    @torch.no_grad()
+    def encode(self, input_embeddings):
+        # CLIP's text model uses causal mask, so we prepare it here:
+        bsz, seq_len = input_embeddings.shape[:2]
+        causal_attention_mask = self.transformer.text_model._build_causal_attention_mask(bsz, seq_len)
+
+        # Getting the output embeddings involves calling the model with passing output_hidden_states=True 
+        # so that it doesn't just return the pooled final predictions:
+        encoder_outputs = self.transformer.text_model.encoder(
+            inputs_embeds=input_embeddings.to(self.device),
+            attention_mask=None, # We aren't using an attention mask so that can be None
+            causal_attention_mask=causal_attention_mask.to(self.device),
+            output_attentions=None,
+            output_hidden_states=True, # We want the output embs not the final output
+            return_dict=None,
+        )
+
+        # We're interested in the output hidden state only
+        output = encoder_outputs[0]
+
+        # There is a final layer norm we need to pass these through
+        output = self.transformer.text_model.final_layer_norm(output)
+
+        # And now they're ready!
+        return output
+
     @should_run_on_gpu
     @torch.no_grad()
     def forward(self, prompt_or_prompts: str or List[str]):
@@ -58,30 +96,15 @@ class CLIPEmbedder(BoringModule):
 
         return outputs.last_hidden_state
 
-class EmbeddingBuilder():
+class PromptBuilder():
     def __init__(self, clip_embedder: CLIPEmbedder) -> None:
         self.clip_embedder = clip_embedder
 
-        tokenizer_output = clip_embedder.tokenizer(
-            "", # the prompt or array of prompts to tokenize
-            truncation=True, # truncate if longer than 77 tokens
-            max_length=77, # Stable Diffusion uses 77 tokens
-            padding="max_length", # If there are less than 77 tokens, pad to 77 tokens
-            return_tensors="pt" # Return pytorch tensor
-        )
-
-        self.token_embeddings = self.clip_embedder.token_embedding(tokenizer_output.input_ids)
+        self.token_embeddings = self.clip_embedder.embed("")
         self.position = 1
 
     def _embed(self, prompt):
-        tokenizer_output = self.clip_embedder.tokenizer(
-            prompt, # the prompt or array of prompts to tokenize
-            truncation=True, # truncate if longer than 77 tokens
-            max_length=76 - self.position, # Stable Diffusion uses 77 tokens
-            padding="do_not_pad", # No padding
-            return_tensors="pt" # Return pytorch tensor
-        )
-        return self.clip_embedder.token_embedding(tokenizer_output.input_ids[:, 1:-1])
+        return self.clip_embedder.embed(prompt, 76 - self.position, "do_not_pad")[:, 1:-1]
 
     def _append_embeddings(self, embeddings):
         self.token_embeddings[0, self.position:self.position+embeddings.size(1), :] = embeddings
@@ -92,7 +115,7 @@ class EmbeddingBuilder():
         self._append_embeddings(embeddings)
 
     def add_combined_prompt(self, prompts, weights, weight=1.0):
-        combined = torch.zeros(1, 1, 768)
+        combined = torch.zeros(1, 1, 768, device=self.device)
         total_weights = sum(weights)
         for i, prompt in enumerate(prompts):
             embeddings = self._embed(prompt)
@@ -106,30 +129,14 @@ class EmbeddingBuilder():
 
     @property
     def embedding(self):
-        input_embeddings = self.token_embeddings + self.clip_embedder.position_embeddings
+        input_embeddings \
+            = self.token_embeddings.to(device=self.device) \
+            + self.clip_embedder.position_embeddings.to(device=self.device)
 
-        # CLIP's text model uses causal mask, so we prepare it here:
-        bsz, seq_len = input_embeddings.shape[:2]
-        causal_attention_mask = self.clip_embedder.transformer.text_model._build_causal_attention_mask(bsz, seq_len)
+        return self.clip_embedder.encode(input_embeddings)
 
-        # Getting the output embeddings involves calling the model with passing output_hidden_states=True 
-        # so that it doesn't just return the pooled final predictions:
-        encoder_outputs = self.clip_embedder.transformer.text_model.encoder(
-            inputs_embeds=input_embeddings,
-            attention_mask=None, # We aren't using an attention mask so that can be None
-            causal_attention_mask=causal_attention_mask.to(self.clip_embedder.device),
-            output_attentions=None,
-            output_hidden_states=True, # We want the output embs not the final output
-            return_dict=None,
-        )
-
-        # We're interested in the output hidden state only
-        output = encoder_outputs[0]
-
-        # There is a final layer norm we need to pass these through
-        output = self.clip_embedder.transformer.text_model.final_layer_norm(output)
-
-        # And now they're ready!
-        return output
+    @property
+    def device(self):
+        return self.clip_embedder.device
 
     

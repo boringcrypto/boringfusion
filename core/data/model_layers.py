@@ -129,6 +129,19 @@ class ModelLayers(OrderedDict):
 
         return self
 
+    def cuda(self):
+        """Converts all layers to half precision (fp16) and returns a new ModelLayers
+        """       
+        return ModelLayers(self.name, self.layer_count)._set({key:self[key].cuda() for key in self.keys()})
+
+    def cuda_(self):
+        """Converts all layers to half precision (fp16) in place
+        """
+        for key in self.keys():
+            self[key] = self[key].cuda()
+
+        return self
+
     def save(self, filename):
         torch.save({
             "name": self.name,
@@ -144,7 +157,7 @@ class ModelLayers(OrderedDict):
         }, filename)
 
     @classmethod
-    def load(cls, path_name_or_modellayersinfo: str or ModelLayersInfo):
+    def load(cls, path_name_or_modellayersinfo: str or ModelLayersInfo, device="cpu"):
         info = None
 
         # Assume it's the filename
@@ -163,7 +176,7 @@ class ModelLayers(OrderedDict):
             info = filename
             filename = filename.filename
 
-        data = torch_load(filename, map_location="cpu")
+        data = torch_load(filename, map_location=device)
         model_layers = cls(data["name"], data["layer_count"])
         if info:
             model_layers.info = info

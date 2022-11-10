@@ -27,14 +27,17 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
         self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
 
-        print("Loading State")
-        if layers is not None:
-            self.diffusion_model.load_state_dict(layers)
+        self.set(layers)
         
         print("Setting eval")
         self.eval()
 
         # self.script = None
+
+    def set(self, layers):
+        print("Loading State")
+        if layers is not None:
+            self.diffusion_model.load_state_dict(layers)
 
     def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):
         x = x.to(self.device, memory_format=torch.channels_last)

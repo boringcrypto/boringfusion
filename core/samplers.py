@@ -2,16 +2,16 @@ import random
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
-from modules.ddim import DDIMSampler as rootDDIMSampler
-from modules.plms import PLMSSampler as rootPLMSSampler
 import k_diffusion
 from pytorch_lightning import seed_everything
 from transformers import logging
 from einops import repeat
 import numpy as np
 from PIL import Image
-
-from modules.util import BoringModule, should_run_on_gpu
+from .modules.ddim import DDIMSampler as rootDDIMSampler
+from .modules.plms import PLMSSampler as rootPLMSSampler
+from .modules.clip import PromptBuilder
+from .modules.util import BoringModule, should_run_on_gpu
 logging.set_verbosity_error()
 
 class CFGDenoiser(torch.nn.Module):
@@ -102,7 +102,7 @@ class Sampler(BoringModule):
         seed_everything(seed if seed != RANDOM_SEED else random.randint(0, 1000000000))
 
     @torch.no_grad()
-    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor, negative_prompt: torch.Tensor, cfg: float, steps: int):
+    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, cfg: float, steps: int):
         """Create images from prompt
 
         Args:
@@ -110,7 +110,7 @@ class Sampler(BoringModule):
             width (integer): Width of the images
             height (integer): Height of the images
             batch_size (integer): Number of images generated simultaneously on the GPU. Higher nunmber takes more VRAM.
-            prompt (str|Tensor): Prompt for the image as string or latent space Tensor
+            prompt (Tensor|PromptBuilder): Prompt for the image as string or latent space Tensor
             exclude (str|Tensor): Negative prompt for the image as string or latent space Tensor
             cfg (float): CFG, scale or strength of the prompt (2 is low, 7.5 is normal, 15+ is high)
             steps (integer): Number of denoising steps
@@ -120,6 +120,9 @@ class Sampler(BoringModule):
         """
         self.set_seed(seed)
         shape = [4, height // 8, width // 8]
+
+        if isinstance(prompt, PromptBuilder):
+            prompt = prompt.embedding
 
         prompt = prompt.to(self.device)
         negative_prompt = negative_prompt.to(self.device)
