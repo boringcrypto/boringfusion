@@ -2,7 +2,7 @@ import os
 import torch
 from core import diffusers_mappings
 from core.safe_unpickler import torch_load
-from .model_layers import ModelLayers, ModelLayersInfo
+from .model_layers import ModelData, ModelDataInfo
 from model_map import map
 
 def treeify(items):
@@ -19,11 +19,11 @@ def treeify(items):
 class StableDiffusionData:
     def __init__(self) -> None:
         self.filename = ""
-        self.clip_text_encoder_layers = ModelLayers("CLIP Encoder", 197)
-        self.vae_encoder_layers = ModelLayers("VAE Encoder", 106)
-        self.vae_decoder_layers = ModelLayers("VAE Decoder", 138)
-        self.unet_layers = ModelLayers("UNet", 686)
-        self.unet_ema_layers = ModelLayers("UNet EMA", 686)
+        self.clip_text_encoder_layers = ModelData("CLIP Encoder", 197)
+        self.vae_encoder_layers = ModelData("VAE Encoder", 106)
+        self.vae_decoder_layers = ModelData("VAE Decoder", 138)
+        self.unet_layers = ModelData("UNet", 686)
+        self.unet_ema_layers = ModelData("UNet EMA", 686)
 
     def load_checkpoint(self, filename, unsafe=False):
         self.filename = os.path.split(filename)[1]
@@ -94,14 +94,14 @@ class StableDiffusionData:
         return self
 
     def save_native(self):
-        def _save(directory, layers: ModelLayers):
+        def _save(directory, layers: ModelData):
             if len(layers):
                 filename = directory + layers.content_hash + "-" + layers.version_hash + ".bin"
                 if not os.path.exists(filename):
                     layers.save(filename)
 
                 if layers.version_hash not in map:
-                    map[layers.version_hash] = ModelLayersInfo(
+                    map[layers.version_hash] = ModelDataInfo(
                         "",
                         layers.name,
                         self.filename,
@@ -119,11 +119,11 @@ class StableDiffusionData:
                         map[layers.version_hash].found_in.append(self.filename)
 
                 with open('model_map_backup.py', 'w') as f:
-                    f.write('from core.data import ModelMap, ModelLayersInfo\n\nmap = ')
+                    f.write('from core.data import ModelMap, ModelDataInfo\n\nmap = ')
                     f.write(str(map))
 
                 with open('model_map.py', 'w') as f:
-                    f.write('from core.data import ModelMap, ModelLayersInfo\n\nmap = ')
+                    f.write('from core.data import ModelMap, ModelDataInfo\n\nmap = ')
                     f.write(str(map))
 
                 os.remove('model_map_backup.py')

@@ -4,7 +4,7 @@ from collections import OrderedDict
 import torch
 from core.safe_unpickler import torch_load
 
-class ModelLayersInfo:
+class ModelDataInfo:
     def __init__(self, shortname, model, name, filename, content_hash, version_hash, dtypes, parameter_count, info_url, download_url, description, found_in):
         self.shortname = shortname
         self.model = model
@@ -20,7 +20,7 @@ class ModelLayersInfo:
         self.found_in = found_in
 
     def __repr__(self):
-        return f"""ModelLayersInfo(
+        return f"""ModelDataInfo(
         "{self.shortname}",
         "{self.model}",
         "{self.name}",
@@ -49,11 +49,11 @@ class ModelMap(dict):
         return "ModelMap({\n" + str.join(",\n", ['    "' + key + '": ' + str(value) for key, value in self.items()]) + "\n})"
 
 
-class ModelLayers(OrderedDict):
+class ModelData(OrderedDict):
     def __init__(self, name="", layer_count=0) -> None:
         self.name = name
         self.layer_count = layer_count
-        self.info = ModelLayersInfo("", name, "", "", "", "", "", 0, "", "", "", [])
+        self.info = ModelDataInfo("", name, "", "", "", "", "", 0, "", "", "", [])
         super().__init__()
 
     @property
@@ -117,9 +117,9 @@ class ModelLayers(OrderedDict):
         return self
 
     def half(self):
-        """Converts all layers to half precision (fp16) and returns a new ModelLayers
+        """Converts all layers to half precision (fp16) and returns a new ModelData
         """       
-        return ModelLayers(self.name, self.layer_count)._set({key:self[key].half() for key in self.keys()})
+        return ModelData(self.name, self.layer_count)._set({key:self[key].half() for key in self.keys()})
 
     def half_(self):
         """Converts all layers to half precision (fp16) in place
@@ -130,9 +130,9 @@ class ModelLayers(OrderedDict):
         return self
 
     def cuda(self):
-        """Converts all layers to half precision (fp16) and returns a new ModelLayers
+        """Converts all layers to half precision (fp16) and returns a new ModelData
         """       
-        return ModelLayers(self.name, self.layer_count)._set({key:self[key].cuda() for key in self.keys()})
+        return ModelData(self.name, self.layer_count)._set({key:self[key].cuda() for key in self.keys()})
 
     def cuda_(self):
         """Converts all layers to half precision (fp16) in place
@@ -157,22 +157,22 @@ class ModelLayers(OrderedDict):
         }, filename)
 
     @classmethod
-    def load(cls, path_name_or_modellayersinfo: str or ModelLayersInfo, device="cpu"):
+    def load(cls, path_name_or_ModelDatainfo: str or ModelDataInfo, device="cpu"):
         info = None
 
         # Assume it's the filename
-        filename = path_name_or_modellayersinfo
-        if isinstance(path_name_or_modellayersinfo, str):
-            if not os.path.exists(path_name_or_modellayersinfo):
+        filename = path_name_or_ModelDatainfo
+        if isinstance(path_name_or_ModelDatainfo, str):
+            if not os.path.exists(path_name_or_ModelDatainfo):
                 # If not a path, try to load the model_map and search it for a match
                 try:
                     from model_map import map
-                    filename = map(path_name_or_modellayersinfo)
+                    filename = map(path_name_or_ModelDatainfo)
                 except: 
                     print("No model map found")
             
-        # If a ModelLayersInfo was passed in or found by search, get the filename
-        if isinstance(filename, ModelLayersInfo):
+        # If a ModelDataInfo was passed in or found by search, get the filename
+        if isinstance(filename, ModelDataInfo):
             info = filename
             filename = filename.filename
 
@@ -188,7 +188,7 @@ class ModelLayers(OrderedDict):
         """Merge with another model (in place)
 
         Args:
-            model (dict or ModelLayers): Another model with the same keys and shapes
+            model (dict or ModelData): Another model with the same keys and shapes
             weight (float, optional): The weight of the model being merged in. A weight of one doesn't do anything, weight of 1 overwrites with the model. Defaults to 0.5.
         """
         for key in self.keys():
@@ -197,13 +197,13 @@ class ModelLayers(OrderedDict):
         return self
 
     def merge(self, model, weight=0.5):
-        """Merge with another model and returns the merged ModelLayers
+        """Merge with another model and returns the merged ModelData
 
         Args:
-            model (dict or ModelLayers): Another model with the same keys and shapes
+            model (dict or ModelData): Another model with the same keys and shapes
             weight (float, optional): The weight of the model being merged in. A weight of one doesn't do anything, weight of 1 overwrites with the model. Defaults to 0.5.
         """
-        combined = ModelLayers(self.name, self.layer_count)
+        combined = ModelData(self.name, self.layer_count)
         for key in self.keys():
             combined[key] = self[key] * (1 - weight) + model[key] * weight
         
@@ -216,7 +216,7 @@ class ModelLayers(OrderedDict):
         return self
 
     def add_diff_(self, base_model, trained_model, weight=1):
-        combined = ModelLayers(self.name, self.layer_count)
+        combined = ModelData(self.name, self.layer_count)
         for key in self.keys():
             combined[key] = self[key] + (trained_model[key] - base_model[key]) * weight
 

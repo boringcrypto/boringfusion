@@ -2,9 +2,9 @@ import os
 from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
 from core.modules.clip import CLIPEmbedder, PromptBuilder
 from core.modules.vae_decoder import VAEDecoder
-from core.data import ModelLayers
+from core.data import ModelData
 from core.modules.stable_diffusion import StableDiffusion
-import model_map
+import models
 
 import gc
 import torch
@@ -19,9 +19,9 @@ def main():
     print("Loading UNets")
     # Loading the models to GPU
     # This speeds up merging models on the fly a lot (near instant), but uses more VRAM
-    sd_unet = ModelLayers.load("SD1.5-fp32", device="cuda").half_()
+    sd_unet = ModelData.load(models.unet.SD1_5_fp32, device="cuda").half_()
     print("Loaded", sd_unet.info.name)
-    wd_unet = ModelLayers.load("WD1.3-fp16", device="cuda")
+    wd_unet = ModelData.load(models.unet.WD1_3_fp16, device="cuda")
     print("Loaded", wd_unet.info.name)
 
     print("Creating UNet")
@@ -30,7 +30,7 @@ def main():
     model = StableDiffusion(None, use_fp16=True, device="cuda")
 
     print("Creating VAE Decoder")
-    decoder = VAEDecoder(ModelLayers.load("VAEDec1.4-fp32")).cuda()
+    decoder = VAEDecoder(ModelData.load(models.decoder.VAEDec1_4_fp32)).cuda()
 
     seed = 42
 

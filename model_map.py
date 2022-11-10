@@ -1,7 +1,7 @@
-from core.data import ModelMap, ModelLayersInfo
+from core.data import ModelMap, ModelDataInfo
 
 map = ModelMap({
-    "5770c902": ModelLayersInfo(
+    "5770c902": ModelDataInfo(
         "CLIPL14-fp16",
         "CLIP Encoder",
         "OpenAI CLIP ViT-L/14 fp16",
@@ -15,7 +15,7 @@ map = ModelMap({
         "The base model uses a ViT-L/14 Transformer architecture as an image encoder and uses a masked self-attention Transformer as a text encoder. The model was trained on publicly available image-caption data. This was done through a combination of crawling a handful of websites and using commonly-used pre-existing image datasets.",
         ['sd-wikiart-v2', 'bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt', 'bondage3_24000.ckpt', 'easter_e5.ckpt', 'furry_epoch4.ckpt', 'gape22_yiffy15.ckpt', 'HD-16.ckpt', 'last-pruned.ckpt', 'LD-70k-1e-pruned.ckpt', 'Lewd-diffusion-pruned.ckpt', 'pyros-bj-v1-0.ckpt', 'r34_e4.ckpt', 'trinart2_step115000.ckpt', 'trinart2_step60000.ckpt', 'trinart2_step95000.ckpt', 'trinart_characters_it4_v1.ckpt', 'wd-v1-3-float16.ckpt', 'yiffy-e18.ckpt', 'Zack3D_Kinky-v1.ckpt'],
     ),
-    "8b408781": ModelLayersInfo(
+    "8b408781": ModelDataInfo(
         "CLIPL14-fp32",
         "CLIP Encoder",
         "OpenAI CLIP ViT-L/14 fp32",
@@ -29,7 +29,7 @@ map = ModelMap({
         "The base model uses a ViT-L/14 Transformer architecture as an image encoder and uses a masked self-attention Transformer as a text encoder. The model was trained on publicly available image-caption data. This was done through a combination of crawling a handful of websites and using commonly-used pre-existing image datasets.",
         ['stable-diffusion-v1-4', 'bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt', 'ema-only-epoch=000142.ckpt', 'gape60.ckpt', 'gg1342_testrun1_pruned.ckpt', 'LOKEAN_MISSIONARY_POV.ckpt', 'LOKEAN_PUPPYSTYLE_POV.ckpt', 'Mixed.ckpt', 'nai-full-latest.ckpt', 'nai-full-pruned.ckpt', 'sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt', 'sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt', 'sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt', 'sd-v1-5-inpainting.ckpt', 'v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt', 'wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt'],
     ),
-    "dacf2615": ModelLayersInfo(
+    "dacf2615": ModelDataInfo(
         "VAEEnc1.4-fp16",
         "VAE Encoder",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt",
@@ -43,7 +43,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt', 'bondage3_24000.ckpt', 'bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt', 'Cyberpunk-Anime-Diffusion.ckpt', 'DCAUV1.ckpt', 'easter_e5.ckpt', 'furry_epoch4.ckpt', 'gape22_yiffy15.ckpt', 'Hiten girl_anime_8k_wallpaper_4k.ckpt', 'last-pruned.ckpt', 'LD-70k-1e-pruned.ckpt', 'Lewd-diffusion-pruned.ckpt', 'pyros-bj-v1-0.ckpt', 'r34_e4.ckpt', 'trinart2_step115000.ckpt', 'trinart2_step60000.ckpt', 'trinart2_step95000.ckpt', 'trinart_characters_it4_v1.ckpt', 'wd-v1-3-float16.ckpt', 'yiffy-e18.ckpt', 'Zack3D_Kinky-v1.ckpt', 'sd-wikiart-v2'],
     ),
-    "56ea7f90": ModelLayersInfo(
+    "56ea7f90": ModelDataInfo(
         "VAEEnc1.4-fp32",
         "VAE Encoder",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt",
@@ -57,7 +57,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt', 'ema-only-epoch=000142.ckpt', 'gape60.ckpt', 'gg1342_testrun1_pruned.ckpt', 'JSD-v1-4.ckpt', 'LOKEAN_MISSIONARY_POV.ckpt', 'LOKEAN_PUPPYSTYLE_POV.ckpt', 'Mixed.ckpt', 'nai-full-latest.ckpt', 'nai-full-pruned.ckpt', 'pachu_artwork_style_v1_iter8000.ckpt', 'robo-diffusion-v1.ckpt', 'sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt', 'sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt', 'sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt', 'sd-v1-5-inpainting.ckpt', 'v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt', 'wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt', 'stable-diffusion-v1-4', 'Taiyi-Stable-Diffusion-1B-Chinese-v0.1'],
     ),
-    "97dd98b1": ModelLayersInfo(
+    "97dd98b1": ModelDataInfo(
         "VAEDec1.4-fp16",
         "VAE Decoder",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt",
@@ -71,7 +71,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt', 'bondage3_24000.ckpt', 'bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt', 'Cyberpunk-Anime-Diffusion.ckpt', 'DCAUV1.ckpt', 'easter_e5.ckpt', 'furry_epoch4.ckpt', 'gape22_yiffy15.ckpt', 'Hiten girl_anime_8k_wallpaper_4k.ckpt', 'last-pruned.ckpt', 'LD-70k-1e-pruned.ckpt', 'Lewd-diffusion-pruned.ckpt', 'pyros-bj-v1-0.ckpt', 'r34_e4.ckpt', 'trinart2_step115000.ckpt', 'trinart2_step60000.ckpt', 'trinart2_step95000.ckpt', 'trinart_characters_it4_v1.ckpt', 'wd-v1-3-float16.ckpt', 'yiffy-e18.ckpt', 'Zack3D_Kinky-v1.ckpt', 'sd-wikiart-v2'],
     ),
-    "8b7877f3": ModelLayersInfo(
+    "8b7877f3": ModelDataInfo(
         "VAEDec1.4-fp32",
         "VAE Decoder",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt",
@@ -85,7 +85,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt', 'ema-only-epoch=000142.ckpt', 'gape60.ckpt', 'gg1342_testrun1_pruned.ckpt', 'JSD-v1-4.ckpt', 'LOKEAN_MISSIONARY_POV.ckpt', 'LOKEAN_PUPPYSTYLE_POV.ckpt', 'Mixed.ckpt', 'nai-full-latest.ckpt', 'nai-full-pruned.ckpt', 'robo-diffusion-v1.ckpt', 'sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt', 'sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt', 'sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt', 'sd-v1-5-inpainting.ckpt', 'v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt', 'wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt', 'stable-diffusion-v1-4', 'Taiyi-Stable-Diffusion-1B-Chinese-v0.1'],
     ),
-    "062d85c8": ModelLayersInfo(
+    "062d85c8": ModelDataInfo(
         "SD1.1-fp32",
         "UNet EMA",
         "Stable Diffusion v1.1 EMA fp32",
@@ -99,7 +99,7 @@ map = ModelMap({
         "Stable Diffusion is a latent text-to-image diffusion model capable of generating photo-realistic images given any text input. The Stable-Diffusion-v-1-1 was trained on 237,000 steps at resolution 256x256 on laion2B-en, followed by 194,000 steps at resolution 512x512 on laion-high-resolution (170M examples from LAION-5B with resolution >= 1024x1024).",
         ['sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt'],
     ),
-    "161f6a95": ModelLayersInfo(
+    "161f6a95": ModelDataInfo(
         "SD1.2-fp32",
         "UNet EMA",
         "Stable Diffusion v1.2 EMA fp32",
@@ -113,7 +113,7 @@ map = ModelMap({
         "Stable Diffusion is a latent text-to-image diffusion model capable of generating photo-realistic images given any text input. The Stable-Diffusion-v-1-2 checkpoint was initialized with the weights of the Stable-Diffusion-v-1-1 checkpoint and subsequently fine-tuned on 515,000 steps at resolution 512x512 on 'laion-improved-aesthetics' (a subset of laion2B-en, filtered to images with an original size >= 512x512, estimated aesthetics score > 5.0, and an estimated watermark probability < 0.5.",
         ['sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt'],
     ),
-    "354e3712": ModelLayersInfo(
+    "354e3712": ModelDataInfo(
         "SD1.3-fp32",
         "UNet EMA",
         "Stable Diffusion v1.3 EMA fp32",
@@ -127,7 +127,7 @@ map = ModelMap({
         "Stable Diffusion is a latent text-to-image diffusion model capable of generating photo-realistic images given any text input. The Stable-Diffusion-v-1-3 checkpoint was initialized with the weights of the Stable-Diffusion-v1-2 checkpoint and subsequently fine-tuned on 195,000 steps at resolution 512x512 on 'laion-improved-aesthetics' and 10\% dropping of the text-conditioning to improve classifier-free guidance sampling.",
         ['sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt'],
     ),
-    "7da99596": ModelLayersInfo(
+    "7da99596": ModelDataInfo(
         "SD1.4-fp32",
         "UNet",
         "Stable Diffusion v1.4 EMA fp32",
@@ -141,7 +141,7 @@ map = ModelMap({
         "Stable Diffusion is a latent text-to-image diffusion model capable of generating photo-realistic images given any text input. The Stable-Diffusion-v-1-4 checkpoint was initialized with the weights of the Stable-Diffusion-v-1-2 checkpoint and subsequently fine-tuned on 225k steps at resolution 512x512 on 'laion-aesthetics v2 5+' and 10\% dropping of the text-conditioning to improve classifier-free guidance sampling.",
         ['stable-diffusion-v1-4', 'Taiyi-Stable-Diffusion-1B-Chinese-v0.1', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt'],
     ),
-    "8d39156d": ModelLayersInfo(
+    "8d39156d": ModelDataInfo(
         "SD1.5-fp32",
         "UNet",
         "Stable Diffusion v1.5 EMA fp32",
@@ -155,7 +155,7 @@ map = ModelMap({
         "Stable Diffusion is a latent text-to-image diffusion model capable of generating photo-realistic images given any text input. The Stable-Diffusion-v1-5 checkpoint was initialized with the weights of the Stable-Diffusion-v1-2 checkpoint and subsequently fine-tuned on 595k steps at resolution 512x512 on 'laion-aesthetics v2 5+' and 10\% dropping of the text-conditioning to improve classifier-free guidance sampling.",
         ['v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt'],
     ),
-    "ab4e402c": ModelLayersInfo(
+    "ab4e402c": ModelDataInfo(
         "JSD1.4-fp32",
         "UNet",
         "Japanese Stable Diffusion 1.4",
@@ -169,7 +169,7 @@ map = ModelMap({
         "Japanese Stable Diffusion is a Japanese-specific latent text-to-image diffusion model capable of generating photo-realistic images given any text input. Trained on approximately 100 million images with Japanese captions, including the Japanese subset of LAION-5B.",
         ['JSD-v1-4.ckpt'],
     ),
-    "fbd17571": ModelLayersInfo(
+    "fbd17571": ModelDataInfo(
         "WD1.3-fp16",
         "UNet",
         "Waifu Diffusion v1.3 EMA fp16",
@@ -183,7 +183,7 @@ map = ModelMap({
         "Waifu Diffusion is a latent text-to-image diffusion model that has been conditioned on high-quality anime images through fine-tuning. The model originally used for fine-tuning is Stable Diffusion 1.4, which is a latent image diffusion model trained on LAION2B-en. The current model has been fine-tuned with a learning rate of 5.0e-6 for 10 epochs on 680k anime-styled images.",
         ['wd-v1-3-float16.ckpt'],
     ),
-    "6a9f373b": ModelLayersInfo(
+    "6a9f373b": ModelDataInfo(
         "WD1.3-fp32",
         "UNet",
         "Waifu Diffusion v1.3 EMA fp32",
@@ -197,7 +197,7 @@ map = ModelMap({
         "Waifu Diffusion is a latent text-to-image diffusion model that has been conditioned on high-quality anime images through fine-tuning. The model originally used for fine-tuning is Stable Diffusion 1.4, which is a latent image diffusion model trained on LAION2B-en. The current model has been fine-tuned with a learning rate of 5.0e-6 for 10 epochs on 680k anime-styled images.",
         ['wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt'],
     ),
-    "5528a400": ModelLayersInfo(
+    "5528a400": ModelDataInfo(
         "HD16-fp16",
         "UNet EMA",
         "Hentai Diffusion v16",
@@ -211,7 +211,7 @@ map = ModelMap({
         "Hentai Diffusion has been made to focus not only on hentai, but better hands and better obscure poses.",
         ['HD-16.ckpt', 'Zack3D_Kinky-v1.ckpt'],
     ),
-    "cedfeefb": ModelLayersInfo(
+    "cedfeefb": ModelDataInfo(
         "NAI-fp32",
         "UNet EMA",
         "Novel AI Full leaked",
@@ -225,7 +225,7 @@ map = ModelMap({
         "NovelAI Image Generation is a proprietary model that was leaked.",
         ['nai-full-latest.ckpt', 'nai-full-pruned.ckpt'],
     ),
-    "72a7f5e3": ModelLayersInfo(
+    "72a7f5e3": ModelDataInfo(
         "WikiArt2-fp16",
         "UNet",
         "sd-wikiart-v2",
@@ -239,7 +239,7 @@ map = ModelMap({
         "",
         ['sd-wikiart-v2'],
     ),
-    "a6c1993d": ModelLayersInfo(
+    "a6c1993d": ModelDataInfo(
         "BF_FB-fp16",
         "UNet",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt",
@@ -253,7 +253,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp16.ckpt'],
     ),
-    "8592715d": ModelLayersInfo(
+    "8592715d": ModelDataInfo(
         "BF_FB-fp32",
         "UNet",
         "bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt",
@@ -267,7 +267,7 @@ map = ModelMap({
         "",
         ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt'],
     ),
-    "1fa05e1e": ModelLayersInfo(
+    "1fa05e1e": ModelDataInfo(
         "",
         "UNet EMA",
         "bondage3_24000.ckpt",
@@ -281,7 +281,7 @@ map = ModelMap({
         "",
         ['bondage3_24000.ckpt'],
     ),
-    "1223ec31": ModelLayersInfo(
+    "1223ec31": ModelDataInfo(
         "",
         "UNet",
         "bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt",
@@ -295,7 +295,7 @@ map = ModelMap({
         "",
         ['bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt'],
     ),
-    "c766bbed": ModelLayersInfo(
+    "c766bbed": ModelDataInfo(
         "",
         "UNet",
         "cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt",
@@ -309,7 +309,7 @@ map = ModelMap({
         "",
         ['cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt'],
     ),
-    "796e54bf": ModelLayersInfo(
+    "796e54bf": ModelDataInfo(
         "",
         "UNet",
         "Cyberpunk-Anime-Diffusion.ckpt",
@@ -323,7 +323,7 @@ map = ModelMap({
         "",
         ['Cyberpunk-Anime-Diffusion.ckpt'],
     ),
-    "116a6e0a": ModelLayersInfo(
+    "116a6e0a": ModelDataInfo(
         "",
         "CLIP Encoder",
         "DCAUV1.ckpt",
@@ -337,7 +337,7 @@ map = ModelMap({
         "",
         ['DCAUV1.ckpt'],
     ),
-    "7acebf57": ModelLayersInfo(
+    "7acebf57": ModelDataInfo(
         "",
         "UNet",
         "DCAUV1.ckpt",
@@ -351,7 +351,7 @@ map = ModelMap({
         "",
         ['DCAUV1.ckpt'],
     ),
-    "6f403e4a": ModelLayersInfo(
+    "6f403e4a": ModelDataInfo(
         "",
         "UNet",
         "easter_e5.ckpt",
@@ -365,7 +365,7 @@ map = ModelMap({
         "",
         ['easter_e5.ckpt'],
     ),
-    "55a0370c": ModelLayersInfo(
+    "55a0370c": ModelDataInfo(
         "",
         "UNet",
         "ema-only-epoch=000142.ckpt",
@@ -379,7 +379,7 @@ map = ModelMap({
         "",
         ['ema-only-epoch=000142.ckpt'],
     ),
-    "89ab3fc3": ModelLayersInfo(
+    "89ab3fc3": ModelDataInfo(
         "",
         "CLIP Encoder",
         "f111.ckpt",
@@ -393,7 +393,7 @@ map = ModelMap({
         "",
         ['f111.ckpt'],
     ),
-    "b2c3db47": ModelLayersInfo(
+    "b2c3db47": ModelDataInfo(
         "",
         "VAE Encoder",
         "f111.ckpt",
@@ -407,7 +407,7 @@ map = ModelMap({
         "",
         ['f111.ckpt'],
     ),
-    "bdd84115": ModelLayersInfo(
+    "bdd84115": ModelDataInfo(
         "",
         "VAE Decoder",
         "f111.ckpt",
@@ -421,7 +421,7 @@ map = ModelMap({
         "",
         ['f111.ckpt'],
     ),
-    "9b3ee072": ModelLayersInfo(
+    "9b3ee072": ModelDataInfo(
         "f111-fp32",
         "UNet",
         "f111.ckpt",
@@ -435,7 +435,7 @@ map = ModelMap({
         "",
         ['f111.ckpt'],
     ),
-    "d996997f": ModelLayersInfo(
+    "d996997f": ModelDataInfo(
         "",
         "CLIP Encoder",
         "f222.ckpt",
@@ -449,7 +449,7 @@ map = ModelMap({
         "",
         ['f222.ckpt'],
     ),
-    "e642e16e": ModelLayersInfo(
+    "e642e16e": ModelDataInfo(
         "",
         "VAE Encoder",
         "f222.ckpt",
@@ -463,7 +463,7 @@ map = ModelMap({
         "",
         ['f222.ckpt'],
     ),
-    "cbc41d9b": ModelLayersInfo(
+    "cbc41d9b": ModelDataInfo(
         "",
         "VAE Decoder",
         "f222.ckpt",
@@ -477,7 +477,7 @@ map = ModelMap({
         "",
         ['f222.ckpt'],
     ),
-    "5a623fe1": ModelLayersInfo(
+    "5a623fe1": ModelDataInfo(
         "f222-fp32",
         "UNet",
         "f222.ckpt",
@@ -491,7 +491,7 @@ map = ModelMap({
         "",
         ['f222.ckpt'],
     ),
-    "06d65eaf": ModelLayersInfo(
+    "06d65eaf": ModelDataInfo(
         "",
         "UNet EMA",
         "furry_epoch4.ckpt",
@@ -505,7 +505,7 @@ map = ModelMap({
         "",
         ['furry_epoch4.ckpt'],
     ),
-    "9355b422": ModelLayersInfo(
+    "9355b422": ModelDataInfo(
         "",
         "UNet EMA",
         "gape22_yiffy15.ckpt",
@@ -519,7 +519,7 @@ map = ModelMap({
         "",
         ['gape22_yiffy15.ckpt'],
     ),
-    "3dde4f97": ModelLayersInfo(
+    "3dde4f97": ModelDataInfo(
         "",
         "UNet",
         "gape60.ckpt",
@@ -533,7 +533,7 @@ map = ModelMap({
         "",
         ['gape60.ckpt'],
     ),
-    "61a460c5": ModelLayersInfo(
+    "61a460c5": ModelDataInfo(
         "GG-fp32",
         "UNet",
         "gg1342_testrun1_pruned.ckpt",
@@ -547,7 +547,7 @@ map = ModelMap({
         "",
         ['gg1342_testrun1_pruned.ckpt'],
     ),
-    "191d2210": ModelLayersInfo(
+    "191d2210": ModelDataInfo(
         "",
         "VAE Encoder",
         "HD-16.ckpt",
@@ -561,7 +561,7 @@ map = ModelMap({
         "",
         ['HD-16.ckpt'],
     ),
-    "05e8c698": ModelLayersInfo(
+    "05e8c698": ModelDataInfo(
         "",
         "VAE Decoder",
         "HD-16.ckpt",
@@ -575,7 +575,7 @@ map = ModelMap({
         "",
         ['HD-16.ckpt'],
     ),
-    "009519cc": ModelLayersInfo(
+    "009519cc": ModelDataInfo(
         "",
         "CLIP Encoder",
         "Hiten girl_anime_8k_wallpaper_4k.ckpt",
@@ -589,7 +589,7 @@ map = ModelMap({
         "",
         ['Hiten girl_anime_8k_wallpaper_4k.ckpt'],
     ),
-    "325017eb": ModelLayersInfo(
+    "325017eb": ModelDataInfo(
         "",
         "UNet",
         "Hiten girl_anime_8k_wallpaper_4k.ckpt",
@@ -603,7 +603,7 @@ map = ModelMap({
         "",
         ['Hiten girl_anime_8k_wallpaper_4k.ckpt'],
     ),
-    "e5611d52": ModelLayersInfo(
+    "e5611d52": ModelDataInfo(
         "",
         "CLIP Encoder",
         "JSD-v1-4.ckpt",
@@ -617,7 +617,7 @@ map = ModelMap({
         "",
         ['JSD-v1-4.ckpt'],
     ),
-    "4e03132f": ModelLayersInfo(
+    "4e03132f": ModelDataInfo(
         "",
         "UNet EMA",
         "last-pruned.ckpt",
@@ -631,7 +631,7 @@ map = ModelMap({
         "",
         ['last-pruned.ckpt'],
     ),
-    "2ee3899d": ModelLayersInfo(
+    "2ee3899d": ModelDataInfo(
         "",
         "UNet EMA",
         "LD-70k-1e-pruned.ckpt",
@@ -645,7 +645,7 @@ map = ModelMap({
         "",
         ['LD-70k-1e-pruned.ckpt'],
     ),
-    "ab8f2115": ModelLayersInfo(
+    "ab8f2115": ModelDataInfo(
         "",
         "UNet EMA",
         "Lewd-diffusion-pruned.ckpt",
@@ -659,7 +659,7 @@ map = ModelMap({
         "",
         ['Lewd-diffusion-pruned.ckpt'],
     ),
-    "d81fcda3": ModelLayersInfo(
+    "d81fcda3": ModelDataInfo(
         "",
         "UNet",
         "LOKEAN_MISSIONARY_POV.ckpt",
@@ -673,7 +673,7 @@ map = ModelMap({
         "",
         ['LOKEAN_MISSIONARY_POV.ckpt'],
     ),
-    "15e554a5": ModelLayersInfo(
+    "15e554a5": ModelDataInfo(
         "",
         "UNet",
         "LOKEAN_PUPPYSTYLE_POV.ckpt",
@@ -687,7 +687,7 @@ map = ModelMap({
         "",
         ['LOKEAN_PUPPYSTYLE_POV.ckpt'],
     ),
-    "130d74ce": ModelLayersInfo(
+    "130d74ce": ModelDataInfo(
         "",
         "UNet",
         "Mixed.ckpt",
@@ -701,7 +701,7 @@ map = ModelMap({
         "",
         ['Mixed.ckpt'],
     ),
-    "b44c8b0e": ModelLayersInfo(
+    "b44c8b0e": ModelDataInfo(
         "",
         "CLIP Encoder",
         "pachu_artwork_style_v1_iter8000.ckpt",
@@ -715,7 +715,7 @@ map = ModelMap({
         "",
         ['pachu_artwork_style_v1_iter8000.ckpt'],
     ),
-    "62ab9f03": ModelLayersInfo(
+    "62ab9f03": ModelDataInfo(
         "",
         "VAE Decoder",
         "pachu_artwork_style_v1_iter8000.ckpt",
@@ -729,7 +729,7 @@ map = ModelMap({
         "",
         ['pachu_artwork_style_v1_iter8000.ckpt'],
     ),
-    "b103a9fc": ModelLayersInfo(
+    "b103a9fc": ModelDataInfo(
         "",
         "UNet",
         "pachu_artwork_style_v1_iter8000.ckpt",
@@ -743,7 +743,7 @@ map = ModelMap({
         "",
         ['pachu_artwork_style_v1_iter8000.ckpt'],
     ),
-    "b8a1e44c": ModelLayersInfo(
+    "b8a1e44c": ModelDataInfo(
         "",
         "UNet",
         "pyros-bj-v1-0.ckpt",
@@ -757,7 +757,7 @@ map = ModelMap({
         "",
         ['pyros-bj-v1-0.ckpt'],
     ),
-    "6910d82d": ModelLayersInfo(
+    "6910d82d": ModelDataInfo(
         "R34e4-fp16",
         "UNet",
         "r34_e4.ckpt",
@@ -771,7 +771,7 @@ map = ModelMap({
         "",
         ['r34_e4.ckpt'],
     ),
-    "72e47874": ModelLayersInfo(
+    "72e47874": ModelDataInfo(
         "",
         "CLIP Encoder",
         "robo-diffusion-v1.ckpt",
@@ -785,7 +785,7 @@ map = ModelMap({
         "",
         ['robo-diffusion-v1.ckpt'],
     ),
-    "cf749104": ModelLayersInfo(
+    "cf749104": ModelDataInfo(
         "",
         "UNet",
         "robo-diffusion-v1.ckpt",
@@ -799,7 +799,7 @@ map = ModelMap({
         "",
         ['robo-diffusion-v1.ckpt'],
     ),
-    "eaa3719c": ModelLayersInfo(
+    "eaa3719c": ModelDataInfo(
         "SD1.5inpaint-fp32",
         "UNet",
         "sd-v1-5-inpainting.ckpt",
@@ -813,7 +813,7 @@ map = ModelMap({
         "",
         ['sd-v1-5-inpainting.ckpt'],
     ),
-    "0c71c262": ModelLayersInfo(
+    "0c71c262": ModelDataInfo(
         "",
         "UNet",
         "trinart2_step115000.ckpt",
@@ -827,7 +827,7 @@ map = ModelMap({
         "",
         ['trinart2_step115000.ckpt'],
     ),
-    "782de700": ModelLayersInfo(
+    "782de700": ModelDataInfo(
         "",
         "UNet",
         "trinart2_step60000.ckpt",
@@ -841,7 +841,7 @@ map = ModelMap({
         "",
         ['trinart2_step60000.ckpt'],
     ),
-    "976c48c9": ModelLayersInfo(
+    "976c48c9": ModelDataInfo(
         "",
         "UNet",
         "trinart2_step95000.ckpt",
@@ -855,7 +855,7 @@ map = ModelMap({
         "",
         ['trinart2_step95000.ckpt'],
     ),
-    "fb4f2006": ModelLayersInfo(
+    "fb4f2006": ModelDataInfo(
         "",
         "UNet",
         "trinart_characters_it4_v1.ckpt",
@@ -869,7 +869,7 @@ map = ModelMap({
         "",
         ['trinart_characters_it4_v1.ckpt'],
     ),
-    "09da1114": ModelLayersInfo(
+    "09da1114": ModelDataInfo(
         "",
         "UNet EMA",
         "yiffy-e18.ckpt",
@@ -883,7 +883,7 @@ map = ModelMap({
         "",
         ['yiffy-e18.ckpt'],
     ),
-    "ef4ab8be": ModelLayersInfo(
+    "ef4ab8be": ModelDataInfo(
         "",
         "CLIP Encoder",
         "bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt",
@@ -897,7 +897,7 @@ map = ModelMap({
         "",
         ['bukkake_20_training_images_2020_max_training_steps_woman_class_word.ckpt'],
     ),
-    "0ec000aa": ModelLayersInfo(
+    "0ec000aa": ModelDataInfo(
         "",
         "CLIP Encoder",
         "cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt",
@@ -911,7 +911,7 @@ map = ModelMap({
         "",
         ['cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt'],
     ),
-    "67084cde": ModelLayersInfo(
+    "67084cde": ModelDataInfo(
         "",
         "VAE Encoder",
         "cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt",
@@ -925,7 +925,7 @@ map = ModelMap({
         "",
         ['cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt'],
     ),
-    "fab450bf": ModelLayersInfo(
+    "fab450bf": ModelDataInfo(
         "",
         "VAE Decoder",
         "cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt",
@@ -939,7 +939,7 @@ map = ModelMap({
         "",
         ['cookie_sd_pony_run_a12_datasetv5_300k_imgs_fp32.ckpt'],
     ),
-    "e05242e9": ModelLayersInfo(
+    "e05242e9": ModelDataInfo(
         "",
         "CLIP Encoder",
         "Cyberpunk-Anime-Diffusion.ckpt",

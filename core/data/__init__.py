@@ -1,4 +1,4 @@
-from .model_layers import ModelLayers, ModelMap, ModelLayersInfo
+from .model_layers import ModelData, ModelMap, ModelDataInfo
 from .sd_data import StableDiffusionData
 
-__all__ = ["ModelLayers", "StableDiffusionData", "ModelMap", "ModelLayersInfo"]
+__all__ = ["ModelData", "StableDiffusionData", "ModelMap", "ModelDataInfo"]

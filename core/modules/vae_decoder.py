@@ -162,10 +162,13 @@ class VAEDecoder(BoringModule):
         super().__init__()
         self.decoder = Decoder()
         self.post_quant_conv = torch.nn.Conv2d(4, 4, 1)
-        if layers is not None:
-            self.load_state_dict(layers)
+        self.set(layers)
         self.eval()
         # self.script = None
+
+    def set(self, layers):
+        if layers is not None:
+            self.load_state_dict(layers)
 
     @should_run_on_gpu
     @torch.no_grad()
