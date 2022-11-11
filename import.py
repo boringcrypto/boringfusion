@@ -46,7 +46,7 @@ def main():
         lines.extend(
             [
                 "    " + re.sub(r'[^a-zA-Z0-9]', '_', model.shortname or model.name) + ' = "' + key + '"' 
-                for key, model in model_map.map.items() if model.model in models
+                for key, model in model_map.map.items() if model.model in models and os.path.exists(model.filename)
             ])
 
     add_model("unet", ["UNet", "UNet EMA"])
