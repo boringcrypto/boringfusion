@@ -1,5 +1,6 @@
 import os
 import hashlib
+from enum import Enum
 from collections import OrderedDict
 import torch
 from core.safe_unpickler import torch_load
@@ -157,17 +158,20 @@ class ModelData(OrderedDict):
         }, filename)
 
     @classmethod
-    def load(cls, path_name_or_ModelDatainfo: str or ModelDataInfo, device="cpu"):
+    def load(cls, path_name_or_modeldatainfo: str or ModelDataInfo, device="cpu"):
         info = None
 
         # Assume it's the filename
-        filename = path_name_or_ModelDatainfo
-        if isinstance(path_name_or_ModelDatainfo, str):
-            if not os.path.exists(path_name_or_ModelDatainfo):
+        filename = path_name_or_modeldatainfo
+        if isinstance(filename, Enum):
+            filename = filename.value
+
+        if isinstance(filename, str):
+            if not os.path.exists(filename):
                 # If not a path, try to load the model_map and search it for a match
                 try:
                     from model_map import map
-                    filename = map(path_name_or_ModelDatainfo)
+                    filename = map(filename)
                 except: 
                     print("No model map found")
             

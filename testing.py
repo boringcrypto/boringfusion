@@ -21,7 +21,7 @@ def main():
     # This speeds up merging models on the fly a lot (near instant), but uses more VRAM
     sd_unet = ModelData.load(models.unet.SD1_5_fp32, device="cuda").half_()
     print("Loaded", sd_unet.info.name)
-    wd_unet = ModelData.load(models.unet.WD1_3_fp16, device="cuda")
+    wd_unet = ModelData.load(models.unet.WD1_3_fp32, device="cuda")
     print("Loaded", wd_unet.info.name)
 
     print("Creating UNet")
