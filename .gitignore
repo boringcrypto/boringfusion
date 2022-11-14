@@ -1,7 +1,6 @@
 __pycache__
 .gitattributes
 /core/data/clip-transformer/pytorch_model.bin
-/outputs
 /htmlcov
 .coverage
 models.py

@@ -51,7 +51,8 @@ class CLIPEmbedder(BoringModule):
             padding=padding, # No padding
             return_tensors="pt" # Return pytorch tensor
         )
-        return self.token_embedding(tokenizer_output.input_ids.to(device=self.device))
+        input_ids = tokenizer_output.input_ids.to(device=self.device)
+        return self.token_embedding(input_ids)
 
     @should_run_on_gpu
     @torch.no_grad()

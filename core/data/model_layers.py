@@ -135,13 +135,27 @@ class ModelData(OrderedDict):
         """       
         return ModelData(self.name, self.layer_count)._set({key:self[key].cuda() for key in self.keys()})
 
-    def cuda_(self):
+    def cuda(self, in_place = True):
         """Converts all layers to half precision (fp16) in place
         """
-        for key in self.keys():
-            self[key] = self[key].cuda()
+        if in_place:
+            for key in self.keys():
+                self[key] = self[key].cuda()
 
-        return self
+            return self
+        else:
+            return ModelData(self.name, self.layer_count)._set({key:self[key].cuda() for key in self.keys()})
+
+    def cpu(self, in_place = True):
+        """Converts all layers to half precision (fp16) and returns a new ModelData
+        """      
+        if in_place: 
+            for key in self.keys():
+                self[key] = self[key].cpu()
+
+            return self
+        else:
+            return ModelData(self.name, self.layer_count)._set({key:self[key].cpu() for key in self.keys()})
 
     def save(self, filename):
         torch.save({
