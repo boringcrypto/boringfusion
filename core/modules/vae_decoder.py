@@ -3,6 +3,8 @@ import torch.nn as nn
 from PIL import Image
 
 from .util import BoringModule, should_run_on_gpu
+from enum import Enum
+from ..data.model_data import ModelData
 
 def nonlinearity(x):
     # swish
@@ -160,6 +162,10 @@ class VAEDecoder(BoringModule):
     def __init__(self, layers=None):
         # TODO: Pass in device and create directly on that device
         super().__init__()
+
+        if isinstance(layers, Enum):
+            layers = ModelData.load(layers)
+
         self.decoder = Decoder()
         self.post_quant_conv = torch.nn.Conv2d(4, 4, 1)
         self.set(layers)

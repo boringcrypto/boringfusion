@@ -195,12 +195,48 @@ class ModelData(OrderedDict):
             filename = filename.filename
 
         data = torch_load(filename, map_location=device)
-        model_layers = cls(data["name"], data["layer_count"])
+        model_data = cls(data["name"], data["layer_count"])
         if info:
-            model_layers.info = info
-        model_layers._set(data["state_dict"])
+            model_data.info = info
+        model_data._set(data["state_dict"])
 
-        return model_layers
+        return model_data
+
+    def save_native(self, source_name, directory, map):
+        if len(self):
+            filename = directory + self.content_hash + "-" + self.version_hash + ".bin"
+            if not os.path.exists(filename):
+                self.save(filename)
+
+            if self.version_hash not in map:
+                map[self.version_hash] = ModelDataInfo(
+                    "",
+                    self.name,
+                    source_name,
+                    filename,
+                    self.content_hash,
+                    self.version_hash,
+                    self.dtypes,
+                    self.parameter_count,
+                    "", "", "",
+                    [source_name]
+                )
+            else:
+                map[self.version_hash].filename = filename
+                if source_name not in map[self.version_hash].found_in:
+                    map[self.version_hash].found_in.append(source_name)
+
+            full_module = 'from core.data import ModelMap, ModelDataInfo\n\nmap = ' + str(map)
+
+            # Saving a backup first, just in case the save gets interupted halfway through
+            with open('model_map_backup.py', 'w') as f:
+                f.write(full_module)
+
+            with open('model_map.py', 'w') as f:
+                f.write(full_module)
+
+            # Remove the backup after a succesful save
+            os.remove('model_map_backup.py')
 
     def merge_(self, model, weight=0.5):
         """Merge with another model (in place)

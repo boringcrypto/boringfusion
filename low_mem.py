@@ -31,7 +31,7 @@ def main():
     model.cpu()
 
     print("Creating VAE Decoder")
-    decoder = VAEDecoder(ModelData.load(models.decoder.VAEDec1_4_fp32))
+    decoder = VAEDecoder(models.decoder.VAEDec1_5mse_fp32)
 
     seed = 42
 
@@ -39,7 +39,6 @@ def main():
     clip = CLIPEmbedder()
     # Using an empty negative prompt, but it's possible to create complex ones with PromptBuilder
     negative_prompt = clip([""])
-    simple = clip("award winning photo of a cat in a lush forest")
 
     print("Sampling")
     for i in range(6):
@@ -47,12 +46,12 @@ def main():
         print("Creating prompt")
         prompt = PromptBuilder(clip)
         prompt.add_prompt("award winning photo of a cat in a lush forest")
-        # prompt.add_combined_prompt(
-        #     ["shark", "dragon", "cat"],
-        #     [0.9 + (i/10), 1, 1]
-        # )
-        # prompt.add_prompt("in a lush forest")
-        # prompt.add_prompt(", by national geographic", weight = 1.3)
+        prompt.add_combined_prompt(
+            ["shark", "dragon", "cat"],
+            [0.9 + (i/10), 1, 1]
+        )
+        prompt.add_prompt("in a lush forest")
+        prompt.add_prompt(", by national geographic", weight = 1.3)
 
         # Interpolate between models
         print("Merging models")
@@ -74,25 +73,11 @@ def main():
         model.set(merged)
 
         # Run the denoising, creating the image (in latent space)
-        sample = EulerASampler(model).sample(
+        sample = DDIMSampler(model).sample(
             seed,
             512, 512, 1,
             prompt, 
-            negative_prompt, 7.5, 20
-        )
-
-        # Decode the images from latent space
-        images = decoder(sample)
-
-        # Save the images
-        save_images(images)
-
-        # Run the denoising, creating the image (in latent space)
-        sample = EulerASampler(model).sample(
-            seed,
-            512, 512, 1,
-            simple, 
-            negative_prompt, 7.5, 20
+            negative_prompt, 7.5, 40
         )
 
         # Decode the images from latent space

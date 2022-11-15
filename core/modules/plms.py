@@ -3,15 +3,15 @@
 import torch
 import numpy as np
 from tqdm import tqdm
+from functools import partial
 
-from .util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like
+from .util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like, make_beta_schedule
 
 
 class PLMSSampler(object):
     def __init__(self, model, schedule="linear", **kwargs):
         super().__init__()
         self.model = model
-        self.ddpm_num_timesteps = model.num_timesteps
         self.schedule = schedule
 
     def register_buffer(self, name, attr):
@@ -24,27 +24,27 @@ class PLMSSampler(object):
         if ddim_eta != 0:
             raise ValueError('ddim_eta must be 0 for PLMS')
         self.ddim_timesteps = make_ddim_timesteps(ddim_discr_method=ddim_discretize, num_ddim_timesteps=ddim_num_steps,
-                                                  num_ddpm_timesteps=self.ddpm_num_timesteps,verbose=verbose)
-        alphas_cumprod = self.model.alphas_cumprod
-        assert alphas_cumprod.shape[0] == self.ddpm_num_timesteps, 'alphas have to be defined for each timestep'
+                                                  num_ddpm_timesteps=1000,verbose=verbose)
+
+        betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
+        alphas = 1. - betas
+        alphas_cumprod = np.cumprod(alphas, axis=0)
+        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
+
         to_torch = lambda x: x.clone().detach().to(torch.float32).to("cuda")
 
-        self.register_buffer('betas', to_torch(self.model.betas))
-        self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
-        self.register_buffer('alphas_cumprod_prev', to_torch(self.model.alphas_cumprod_prev))
+        self.register_buffer('betas', to_torch(torch.tensor(betas)))
+        self.register_buffer('alphas_cumprod', to_torch(torch.tensor(alphas_cumprod)))
+        self.register_buffer('alphas_cumprod_prev', to_torch(torch.tensor(alphas_cumprod_prev)))
 
         # ddim sampling parameters
-        ddim_sigmas, ddim_alphas, ddim_alphas_prev = make_ddim_sampling_parameters(alphacums=alphas_cumprod.cpu(),
+        ddim_sigmas, ddim_alphas, ddim_alphas_prev = make_ddim_sampling_parameters(alphacums=torch.tensor(alphas_cumprod).cpu(),
                                                                                    ddim_timesteps=self.ddim_timesteps,
                                                                                    eta=ddim_eta,verbose=verbose)
         self.register_buffer('ddim_sigmas', ddim_sigmas)
         self.register_buffer('ddim_alphas', ddim_alphas)
         self.register_buffer('ddim_alphas_prev', ddim_alphas_prev)
         self.register_buffer('ddim_sqrt_one_minus_alphas', np.sqrt(1. - ddim_alphas))
-        sigmas_for_original_sampling_steps = ddim_eta * torch.sqrt(
-            (1 - self.alphas_cumprod_prev) / (1 - self.alphas_cumprod) * (
-                        1 - self.alphas_cumprod / self.alphas_cumprod_prev))
-        self.register_buffer('ddim_sigmas_for_original_num_steps', sigmas_for_original_sampling_steps)
 
     @torch.no_grad()
     def sample(self,
@@ -78,12 +78,10 @@ class PLMSSampler(object):
         # sampling
         C, H, W = shape
         size = (batch_size, C, H, W)
-        print(f'Data shape for PLMS sampling is {size}')
 
         samples = self.plms_sampling(conditioning, size,
                                                     callback=callback,
                                                     img_callback=img_callback,
-                                                    ddim_use_original_steps=False,
                                                     temperature=temperature,
                                                     score_corrector=score_corrector,
                                                     corrector_kwargs=corrector_kwargs,
@@ -95,12 +93,12 @@ class PLMSSampler(object):
 
     @torch.no_grad()
     def plms_sampling(self, cond, shape,
-                      x_T=None, ddim_use_original_steps=False,
+                      x_T=None,
                       callback=None, timesteps=None,
                       img_callback=None,
                       temperature=1., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None,):
-        device = self.model.betas.device
+                      unconditional_guidance_scale=1., unconditional_conditioning=None):
+        device = self.model.device
         b = shape[0]
         if x_T is None:
             img = torch.randn(shape, device=device)
@@ -108,14 +106,13 @@ class PLMSSampler(object):
             img = x_T
 
         if timesteps is None:
-            timesteps = self.ddpm_num_timesteps if ddim_use_original_steps else self.ddim_timesteps
-        elif timesteps is not None and not ddim_use_original_steps:
+            timesteps = self.ddim_timesteps
+        elif timesteps is not None:
             subset_end = int(min(timesteps / self.ddim_timesteps.shape[0], 1) * self.ddim_timesteps.shape[0]) - 1
             timesteps = self.ddim_timesteps[:subset_end]
 
-        time_range = list(reversed(range(0,timesteps))) if ddim_use_original_steps else np.flip(timesteps)
-        total_steps = timesteps if ddim_use_original_steps else timesteps.shape[0]
-        print(f"Running PLMS Sampling with {total_steps} timesteps")
+        time_range = np.flip(timesteps)
+        total_steps = timesteps.shape[0]
 
         iterator = tqdm(time_range, desc='PLMS Sampler', total=total_steps)
         old_eps = []
@@ -125,7 +122,7 @@ class PLMSSampler(object):
             ts = torch.full((b,), step, device=device, dtype=torch.long)
             ts_next = torch.full((b,), time_range[min(i + 1, len(time_range) - 1)], device=device, dtype=torch.long)
 
-            outs = self.p_sample_plms(img, cond, ts, index=index, use_original_steps=ddim_use_original_steps,
+            outs = self.p_sample_plms(img, cond, ts, index=index,
                                       temperature=temperature,
                                       score_corrector=score_corrector,
                                       corrector_kwargs=corrector_kwargs,
@@ -142,7 +139,7 @@ class PLMSSampler(object):
         return img
 
     @torch.no_grad()
-    def p_sample_plms(self, x, c, t, index, repeat_noise=False, use_original_steps=False,
+    def p_sample_plms(self, x, c, t, index, repeat_noise=False,
                       temperature=1., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None, old_eps=None, t_next=None):
         b, *_, device = *x.shape, x.device
@@ -156,10 +153,10 @@ class PLMSSampler(object):
 
             return e_t
 
-        alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
-        alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
-        sqrt_one_minus_alphas = self.model.sqrt_one_minus_alphas_cumprod if use_original_steps else self.ddim_sqrt_one_minus_alphas
-        sigmas = self.model.ddim_sigmas_for_original_num_steps if use_original_steps else self.ddim_sigmas
+        alphas = self.ddim_alphas
+        alphas_prev = self.ddim_alphas_prev
+        sqrt_one_minus_alphas = self.ddim_sqrt_one_minus_alphas
+        sigmas = self.ddim_sigmas
 
         def get_x_prev_and_pred_x0(e_t, index):
             # select parameters corresponding to the currently considered timestep

@@ -2,8 +2,11 @@ import os
 import torch
 from core import diffusers_mappings
 from core.safe_unpickler import torch_load
-from .model_layers import ModelData, ModelDataInfo
-from model_map import map
+from .model_data import ModelData
+try:
+    from model_map_backup import map
+except:
+    from model_map import map
 
 def treeify(items):
     tree = {}
@@ -51,6 +54,18 @@ class StableDiffusionData:
                 self.vae_decoder_layers["post_quant_conv.weight"] = state_dict["first_stage_model.post_quant_conv.weight"]
                 self.vae_decoder_layers.layer_count += 2
 
+        if "encoder" in key_tree and "quant_conv" in key_tree and "conv_in" in key_tree["encoder"]:
+            self.vae_encoder_layers.set_from_state_dict(state_dict, "encoder.", prepend="encoder.")
+            self.vae_encoder_layers["quant_conv.bias"] = state_dict["quant_conv.bias"]
+            self.vae_encoder_layers["quant_conv.weight"] = state_dict["quant_conv.weight"]
+            self.vae_encoder_layers.layer_count += 2
+
+        if "decoder" in key_tree and "post_quant_conv" in key_tree and "conv_in" in key_tree["decoder"]:
+                self.vae_decoder_layers.set_from_state_dict(state_dict, "decoder.", prepend="decoder.")
+                self.vae_decoder_layers["post_quant_conv.bias"] = state_dict["post_quant_conv.bias"]
+                self.vae_decoder_layers["post_quant_conv.weight"] = state_dict["post_quant_conv.weight"]
+                self.vae_decoder_layers.layer_count += 2
+
         if "model" in key_tree and "diffusion_model" in key_tree["model"]:
             self.unet_layers.set_from_state_dict(state_dict, "model.diffusion_model.")
 
@@ -94,46 +109,12 @@ class StableDiffusionData:
         return self
 
     def save_native(self):
-        def _save(directory, layers: ModelData):
-            if len(layers):
-                filename = directory + layers.content_hash + "-" + layers.version_hash + ".bin"
-                if not os.path.exists(filename):
-                    layers.save(filename)
-
-                if layers.version_hash not in map:
-                    map[layers.version_hash] = ModelDataInfo(
-                        "",
-                        layers.name,
-                        self.filename,
-                        filename,
-                        layers.content_hash,
-                        layers.version_hash,
-                        layers.dtypes,
-                        layers.parameter_count,
-                        "", "", "",
-                        [self.filename]
-                    )
-                else:
-                    map[layers.version_hash].filename = filename
-                    if self.filename not in map[layers.version_hash].found_in:
-                        map[layers.version_hash].found_in.append(self.filename)
-
-                with open('model_map_backup.py', 'w') as f:
-                    f.write('from core.data import ModelMap, ModelDataInfo\n\nmap = ')
-                    f.write(str(map))
-
-                with open('model_map.py', 'w') as f:
-                    f.write('from core.data import ModelMap, ModelDataInfo\n\nmap = ')
-                    f.write(str(map))
-
-                os.remove('model_map_backup.py')
-
-        _save("data/clip-text-encoder/", self.clip_text_encoder_layers)
-        _save("data/vae-encoder/", self.vae_encoder_layers)
-        _save("data/vae-decoder/", self.vae_decoder_layers)
+        self.clip_text_encoder_layers.save_native(self.filename, "data/clip-text-encoder/", map)
+        self.vae_encoder_layers.save_native(self.filename, "data/vae-encoder/", map)
+        self.vae_decoder_layers.save_native(self.filename, "data/vae-decoder/", map)
         if not len(self.unet_ema_layers):
-            _save("data/unet/", self.unet_layers)
-        _save("data/unet/", self.unet_ema_layers)
+            self.unet_layers.save_native(self.filename, "data/unet/", map)
+        self.unet_ema_layers.save_native(self.filename, "data/unet/", map)
 
     @property
     def full_state_dict(self):

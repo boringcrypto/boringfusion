@@ -130,36 +130,6 @@ class Sampler(BoringModule):
         samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
         return samples
 
-    @torch.no_grad()
-    def sample_img(self, seed: int, width: int, height: int, batch_size: int, init_image, prompt: torch.Tensor, exclude: torch.Tensor, cfg: float, strength: float, steps: int):
-        """Create images from images
-
-        Args:
-            seed (integer): A seed or RANDOM_SEED to use a random seed.
-            width (integer): Width of the images
-            height (integer): Height of the images
-            batch_size (integer): Number of images generated simultaneously on the GPU. Higher nunmber takes more VRAM.
-            prompt (str|Tensor): Prompt for the image as string or latent space Tensor
-            exclude (str|Tensor): Negative prompt for the image as string or latent space Tensor
-            cfg (float): CFG, scale or strength of the prompt (2 is low, 7.5 is normal, 15+ is high)
-            steps (integer): Number of denoising steps
-
-        Returns:
-            _type_: _description_
-        """
-        self.set_seed(seed)
-        shape = [4, height // 8, width // 8]
-
-        init_image = load_img(init_image)
-        init_image = repeat(init_image, '1 ... -> b ...', b=batch_size)
-        init_latent = self.model.get_first_stage_encoding(self.model.encode_first_stage(init_image))  # move to latent space
-
-        c = self.model.to_latent(batch_size * [prompt]) if isinstance(prompt, str) else prompt
-        uc = self.model.to_latent(batch_size * [exclude]) if exclude is None or isinstance(exclude, str) else exclude
-
-        samples = self._sample_image(batch_size, c, uc, cfg, steps, init_latent, strength, shape)
-        return samples
-
 
 class BaseSampler(Sampler):
     def __init__(self, model, sampler_class) -> None:
@@ -178,15 +148,6 @@ class BaseSampler(Sampler):
             x_T=None)
         return samples
 
-    def _sample_image(self, batch_size, c, uc, cfg, steps, init_latent, strength, shape):
-        self.sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0, verbose=False)
-        t_enc = int(strength * steps)
-
-        # encode (scaled latent)
-        z_enc = self.sampler.stochastic_encode(init_latent, torch.tensor([t_enc]*batch_size))
-        # decode it
-        samples = self.sampler.decode(z_enc, c, t_enc, unconditional_guidance_scale=cfg, unconditional_conditioning=uc,)  
-        return samples     
 
 class KSampler(Sampler):
     def __init__(self, model) -> None:
@@ -205,20 +166,6 @@ class KSampler(Sampler):
         samples = self._inner(model_wrap_cfg, x, sigmas, steps, extra_args=extra_args)
         return samples
 
-    def _sample_image(self, batch_size, c, uc, cfg, steps, init_latent, strength, shape):
-        t_enc = int(strength * steps)   
-        sigmas = self.model_wrap.get_sigmas(steps)
-        sigma_sched = sigmas[steps - t_enc - 1:]
-        noise = torch.randn([batch_size, *shape], device=self.device) * sigmas[0]
-        x = init_latent + (noise * sigma_sched[0])
-        model_wrap_cfg = CFGDenoiser(self.model_wrap)
-        extra_args = {'cond': c, 'uncond': uc, 'cond_scale': cfg}
-
-        self.sigma_min = sigma_sched[-2]
-        self.sigma_max = sigma_sched[0]
-
-        samples = self._inner(model_wrap_cfg, x, sigmas, steps, extra_args=extra_args)
-        return samples
 
 class DDIMSampler(BaseSampler):
     def __init__(self, model) -> None:

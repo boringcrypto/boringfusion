@@ -12,21 +12,6 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         super().__init__()
         self.diffusion_model = UNetModel(use_fp16=use_fp16, device=device)
 
-        print("Making schedule")
-        betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
-        alphas = 1. - betas
-        alphas_cumprod = np.cumprod(alphas, axis=0)
-        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
-
-        timesteps, = betas.shape
-        self.num_timesteps = int(timesteps)
-
-        to_torch = partial(torch.tensor, dtype=self.dtype, device=device)
-
-        self.register_buffer('betas', to_torch(betas))
-        self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
-        self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
-
         self.set(layers)
         
         print("Setting eval")
@@ -39,9 +24,9 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         if layers is not None:
             self.diffusion_model.load_state_dict(layers)
 
-    def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):
-        x = x.to(self.device, memory_format=torch.channels_last)
-        t = t.to(self.device)
+    def forward(self, input_latent, noisiness, c_concat: list = None, c_crossattn: list = None):
+        input_latent = input_latent.to(self.device, memory_format=torch.channels_last)
+        noisiness = noisiness.to(self.device)
         cc = torch.cat(c_crossattn, 1).to(self.device)
 
         # if self.script is None:
@@ -52,9 +37,9 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         #     self.script.save("unet.ts")
 
             # self.script = torch.jit.load("unet.ts")
-        out = self.diffusion_model(x, t, context=cc)
+        output_latent = self.diffusion_model(input_latent, noisiness, context=cc)
 
-        return out
+        return output_latent
 
     def apply_model(self, x_noisy, t, cond, return_ids=False):
         if not isinstance(cond, list):
