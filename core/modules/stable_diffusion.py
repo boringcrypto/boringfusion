@@ -16,6 +16,7 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         
         print("Setting eval")
         self.eval()
+        self.to(device=device)
 
         # self.script = None
 

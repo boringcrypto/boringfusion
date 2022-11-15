@@ -1,6 +1,7 @@
 import importlib
 import glob, re, os
 from core.data import StableDiffusionData
+from core.safe_unpickler import torch_load
 import model_map
 
 
@@ -36,6 +37,31 @@ class Importer():
             print()
             data.save_native()
 
+    def import_hypernet(self, filename):
+        found = [
+            os.path.exists(model.filename)
+            for model in self.map.values() 
+            if os.path.split(filename)[1] in model.found_in
+        ]
+
+        if not len(found) or not all(found):
+            data = StableDiffusionData()
+            data.load_hypernet(filename)
+            print(data)
+            print()
+            data.save_native()
+
+    def import_file(self, filename):
+        found = [
+            os.path.exists(model.filename)
+            for model in self.map.values() 
+            if os.path.split(filename)[1] in model.found_in
+        ]
+
+        if not len(found) or not all(found):
+            data = torch_load(filename)
+            print(filename, data.keys())
+
     def create_model_enums(self):
         lines = [
             "from enum import Enum",
@@ -61,11 +87,12 @@ class Importer():
 
 def main():
     importer = Importer(model_map.map)
-    
-    for diffusers_directory in glob.glob("import/*"):
-        if os.path.isdir(diffusers_directory):
-            print(diffusers_directory)
-            importer.import_diffusers(diffusers_directory)
+
+    for path in glob.glob("import/*"):
+        if os.path.isdir(path):
+            importer.import_diffusers(path)
+        # else:
+        #     importer.import_file(path)
 
     for checkpoint_filename in glob.glob("import/*.ckpt"):
         print(checkpoint_filename)

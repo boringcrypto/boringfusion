@@ -8,10 +8,11 @@ from transformers import logging
 from einops import repeat
 import numpy as np
 from PIL import Image
+from tqdm.auto import trange, tqdm
 from .modules.ddim import DDIMSampler as rootDDIMSampler
 from .modules.plms import PLMSSampler as rootPLMSSampler
 from .modules.clip import PromptBuilder
-from .modules.util import BoringModule, should_run_on_gpu
+from .modules.util import BoringModule, should_run_on_gpu, make_beta_schedule
 logging.set_verbosity_error()
 
 class CFGDenoiser(torch.nn.Module):
@@ -91,18 +92,21 @@ class Sampler(BoringModule):
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
+        betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
+        alphas = 1. - betas
+        alphas_cumprod = np.cumprod(alphas, axis=0)
+        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
+        self.alphas_cumprod = torch.tensor(alphas_cumprod, device = "cuda")
 
-    def _sample(self, batch_size, c, uc, cfg):
-        pass
 
-    def _sample_image(self, batch_size, c, uc, cfg, steps, init_latent, strength, shape):
+    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape):
         pass
 
     def set_seed(self, seed):
         seed_everything(seed if seed != RANDOM_SEED else random.randint(0, 1000000000))
 
     @torch.no_grad()
-    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, cfg: float, steps: int):
+    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, cfg: float, steps: int, callback = None):
         """Create images from prompt
 
         Args:
@@ -127,7 +131,7 @@ class Sampler(BoringModule):
         prompt = prompt.to(self.device)
         negative_prompt = negative_prompt.to(self.device)
 
-        samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape)
+        samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape, callback)
         return samples
 
 
@@ -136,7 +140,7 @@ class BaseSampler(Sampler):
         super().__init__(model)
         self.sampler = sampler_class(model)
 
-    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape):
+    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape, callback):
         samples = self.sampler.sample(S=steps,
             conditioning=prompt,
             batch_size=batch_size,
@@ -148,23 +152,44 @@ class BaseSampler(Sampler):
             x_T=None)
         return samples
 
+class CompVisDenoiser(k_diffusion.external.DiscreteEpsDDPMDenoiser):
+    """A wrapper for CompVis diffusion models."""
+
+    def __init__(self, model, alphas_cumprod, quantize=False, device='cpu'):
+        super().__init__(model, alphas_cumprod, quantize=quantize)
+
+    def get_eps(self, *args, **kwargs):
+        return self.inner_model.apply_model(*args, **kwargs)
+
 
 class KSampler(Sampler):
     def __init__(self, model) -> None:
         super().__init__(model)
-        self.model_wrap = k_diffusion.external.CompVisDenoiser(model)
+        self.model_wrap = CompVisDenoiser(model, self.alphas_cumprod)
         self.sigma_min, self.sigma_max = self.model_wrap.sigmas[0].item(), self.model_wrap.sigmas[-1].item()
 
     def _inner(self):
         pass
 
-    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape):
-        sigmas = self.model_wrap.get_sigmas(steps).to(self.device)   
+    def _get_sigmas(self, steps):
+        return self.model_wrap.get_sigmas(steps).to(self.device)   
+
+    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape, callback):
+        sigmas = self._get_sigmas(steps)
         x = torch.randn([batch_size, *shape], device=self.device) * sigmas[0]
         model_wrap_cfg = CFGDenoiser(self.model_wrap)
         extra_args = {'cond': prompt, 'uncond': negative_prompt, 'cond_scale': cfg}
-        samples = self._inner(model_wrap_cfg, x, sigmas, steps, extra_args=extra_args)
+        samples = self._inner(model_wrap_cfg, x, sigmas, steps, extra_args=extra_args, callback=callback)
         return samples
+
+
+class KKarrasSampler(KSampler):
+    def _get_sigmas(self, steps):
+        return k_diffusion.sampling.get_sigmas_karras(n=steps, sigma_min=0.1, sigma_max=10, device=self.device)  
+
+class KTweakedKarrasSampler(KSampler):
+    def _get_sigmas(self, steps):
+        return k_diffusion.sampling.get_sigmas_karras(n=steps, sigma_min=0.1072, sigma_max=7.0796, rho=9, device=self.device)  
 
 
 class DDIMSampler(BaseSampler):
@@ -176,57 +201,163 @@ class PLMSSampler(BaseSampler):
         super().__init__(model, rootPLMSSampler)
 
 class EulerSampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_euler(model_wrap_cfg, x, sigmas, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_euler(model_wrap_cfg, x, sigmas, extra_args, callback)
 
 class EulerASampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_euler_ancestral(model_wrap_cfg, x, sigmas, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_euler_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
 
 class DPMAdaptiveSampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_dpm_adaptive(model_wrap_cfg, x, self.sigma_min, self.sigma_max, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_adaptive(model_wrap_cfg, x, self.sigma_min, self.sigma_max, extra_args, callback)
 
 class DPMFastSampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_dpm_fast(model_wrap_cfg, x, self.sigma_min, self.sigma_max, steps, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_fast(model_wrap_cfg, x, self.sigma_min, self.sigma_max, steps, extra_args, callback)
 
 class DPM2Sampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_dpm_2(model_wrap_cfg, x, sigmas, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_2(model_wrap_cfg, x, sigmas, extra_args, callback)
 
 class DPM2ASampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_dpm_2_ancestral(model_wrap_cfg, x, sigmas, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_2_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
 
 class HeunSampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
-
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_heun(model_wrap_cfg, x, sigmas, extra_args)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_heun(model_wrap_cfg, x, sigmas, extra_args, callback)
 
 class LMSSampler(KSampler):
-    def __init__(self, model) -> None:
-        super().__init__(model)
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_lms(model_wrap_cfg, x, sigmas, extra_args, callback)
 
-    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args):
-        return k_diffusion.sampling.sample_lms(model_wrap_cfg, x, sigmas, extra_args)
+class DPMpp2SaSampler(KSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpmpp_2s_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPMpp2MSampler(KSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpmpp_2m(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class LMSKarrasSampler(KKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_lms(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPM2KarrasSampler(KKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_2(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPM2AKarrasSampler(KKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpm_2_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPMpp2SaKarrasSampler(KKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpmpp_2s_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPMpp2MKarrasSampler(KKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpmpp_2m(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+@torch.no_grad()
+def sample_dpmpp_2s_ancestral(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1.):
+    """Ancestral sampling with DPM-Solver++(2S) second-order steps."""
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    sigma_fn = lambda t: t.neg().exp()
+    t_fn = lambda sigma: sigma.log().neg()
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        denoised = model(x, sigmas[i] * s_in, **extra_args)
+        sigma_down, sigma_up = k_diffusion.sampling.get_ancestral_step(sigmas[i], sigmas[i + 1], eta=eta)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+        if sigma_down == 0:
+            # Euler method
+            d = k_diffusion.sampling.to_d(x, sigmas[i], denoised)
+            dt = sigma_down - sigmas[i]
+            x = x + d * dt
+        else:
+            # DPM-Solver-2++(2S)
+            t, t_next = t_fn(sigmas[i]), t_fn(sigma_down)
+            r = 1 / 2
+            h = t_next - t
+            s = t + r * h
+            x_2 = (sigma_fn(s) / sigma_fn(t)) * x - (-h * r).expm1() * denoised
+            denoised_2 = model(x_2, sigma_fn(s) * s_in, **extra_args)
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_2
+        # Noise addition
+        x = x + torch.randn_like(x) * s_noise * sigma_up
+    return x
+
+
+@torch.no_grad()
+def sample_dpmpp_2m(model, x, sigmas, extra_args=None, callback=None, disable=None):
+    """DPM-Solver++(2M)."""
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    sigma_fn = lambda t: t.neg().exp()
+    t_fn = lambda sigma: sigma.log().neg()
+    old_denoised = None
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        denoised = model(x, sigmas[i] * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+        t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
+        h = t_next - t
+        if old_denoised is None or sigmas[i + 1] == 0:
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised
+        else:
+            h_last = t - t_fn(sigmas[i - 1])
+            r = h_last / h
+            denoised_d = (1 + 1 / (2 * r)) * denoised - (1 / (2 * r)) * old_denoised
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_d
+        old_denoised = denoised
+    return x
+
+
+
+@torch.no_grad()
+def sample_dpmpp_2m_with_2s_start(model, x, sigmas, extra_args=None, callback=None, disable=None):
+    """DPM-Solver++(2M) with 2S starting step."""
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    sigma_fn = lambda t: t.neg().exp()
+    t_fn = lambda sigma: sigma.log().neg()
+    old_denoised = None
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        denoised = model(x, sigmas[i] * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+        t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
+        h = t_next - t
+        if old_denoised is None:
+            r = 1 / 2
+            h = t_next - t
+            s = t + r * h
+            x_2 = (sigma_fn(s) / sigma_fn(t)) * x - (-h * r).expm1() * denoised
+            denoised_2 = model(x_2, sigma_fn(s) * s_in, **extra_args)
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_2
+        elif sigmas[i + 1] == 0:            
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised
+        else:
+            h_last = t - t_fn(sigmas[i - 1])
+            r = h_last / h
+            denoised_d = (1 + 1 / (2 * r)) * denoised - (1 / (2 * r)) * old_denoised
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_d
+        old_denoised = denoised
+    return x
+
+    
+class DPMpp2M2SSampler(KTweakedKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return sample_dpmpp_2m_with_2s_start(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+class DPMpp2SaTweakedSampler(KTweakedKarrasSampler):
+    def _inner(self, model_wrap_cfg, x, sigmas, steps, extra_args, callback):
+        return k_diffusion.sampling.sample_dpmpp_2s_ancestral(model_wrap_cfg, x, sigmas, extra_args, callback)
+
+

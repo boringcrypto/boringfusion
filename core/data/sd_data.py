@@ -61,10 +61,10 @@ class StableDiffusionData:
             self.vae_encoder_layers.layer_count += 2
 
         if "decoder" in key_tree and "post_quant_conv" in key_tree and "conv_in" in key_tree["decoder"]:
-                self.vae_decoder_layers.set_from_state_dict(state_dict, "decoder.", prepend="decoder.")
-                self.vae_decoder_layers["post_quant_conv.bias"] = state_dict["post_quant_conv.bias"]
-                self.vae_decoder_layers["post_quant_conv.weight"] = state_dict["post_quant_conv.weight"]
-                self.vae_decoder_layers.layer_count += 2
+            self.vae_decoder_layers.set_from_state_dict(state_dict, "decoder.", prepend="decoder.")
+            self.vae_decoder_layers["post_quant_conv.bias"] = state_dict["post_quant_conv.bias"]
+            self.vae_decoder_layers["post_quant_conv.weight"] = state_dict["post_quant_conv.weight"]
+            self.vae_decoder_layers.layer_count += 2
 
         if "model" in key_tree and "diffusion_model" in key_tree["model"]:
             self.unet_layers.set_from_state_dict(state_dict, "model.diffusion_model.")
@@ -107,6 +107,30 @@ class StableDiffusionData:
         self.unet_layers.set_from_state_dict(unet_layers, "", diffusers_mappings.unet)
 
         return self
+
+    def load_hypernet(self, filename):
+        self.filename = os.path.split(filename)[1]
+
+        data = torch_load(filename, map_location='cpu')
+       
+        if "state_dict" in data:
+            data = data["state_dict"]
+
+        key_tree = treeify(data.keys())
+
+        if "encoder" in key_tree and "quant_conv" in key_tree and "conv_in" in key_tree["encoder"]:
+            self.vae_encoder_layers.set_from_state_dict(data, "encoder.", prepend="encoder.")
+            self.vae_encoder_layers["quant_conv.bias"] = data["quant_conv.bias"]
+            self.vae_encoder_layers["quant_conv.weight"] = data["quant_conv.weight"]
+            self.vae_encoder_layers.layer_count += 2
+
+        if "decoder" in key_tree and "post_quant_conv" in key_tree and "conv_in" in key_tree["decoder"]:
+            self.vae_decoder_layers.set_from_state_dict(data, "decoder.", prepend="decoder.")
+            self.vae_decoder_layers["post_quant_conv.bias"] = data["post_quant_conv.bias"]
+            self.vae_decoder_layers["post_quant_conv.weight"] = data["post_quant_conv.weight"]
+            self.vae_decoder_layers.layer_count += 2
+
+        # print(data.keys())
 
     def save_native(self):
         self.clip_text_encoder_layers.save_native(self.filename, "data/clip-text-encoder/", map)
