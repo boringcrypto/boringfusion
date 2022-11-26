@@ -1,6 +1,6 @@
 import importlib
 import glob, re, os
-from core.data import StableDiffusionData
+from core.data.sd_data import StableDiffusionData, StableDiffusionDataImporter
 from core.safe_unpickler import torch_load
 import model_map
 
@@ -17,11 +17,11 @@ class Importer():
         ]
 
         if not len(found) or not all(found):
-            data = StableDiffusionData()
-            data.load_checkpoint(filename)
+            data = StableDiffusionDataImporter()
+            data.import_checkpoint(filename)
             print(data)
             print()
-            data.save_native()
+            self.save_map()
 
     def import_diffusers(self, directory):
         found = [
@@ -35,7 +35,8 @@ class Importer():
             data.load_diffusers(directory)
             print(data)
             print()
-            data.save_native()
+            data.save_native(self.map)
+            self.save_map()
 
     def import_hypernet(self, filename):
         found = [
@@ -49,7 +50,7 @@ class Importer():
             data.load_hypernet(filename)
             print(data)
             print()
-            data.save_native()
+            data.save_native(self.map)
 
     def import_file(self, filename):
         found = [
@@ -61,6 +62,20 @@ class Importer():
         if not len(found) or not all(found):
             data = torch_load(filename)
             print(filename, data.keys())
+
+    def save_map(self):
+        full_module = 'from core.data import ModelMap, ModelDataInfo\n\nmap = ' + str(self.map)
+
+        # Saving a backup first, just in case the save gets interupted halfway through
+        with open('model_map_backup.py', 'w') as f:
+            f.write(full_module)
+
+        with open('model_map.py', 'w') as f:
+            f.write(full_module)
+
+        # Remove the backup after a succesful save
+        os.remove('model_map_backup.py')
+
 
     def create_model_enums(self):
         lines = [
@@ -89,7 +104,7 @@ def main():
     importer = Importer(model_map.map)
 
     for path in glob.glob("import/*"):
-        if os.path.isdir(path):
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, "model_index.json")):
             importer.import_diffusers(path)
         # else:
         #     importer.import_file(path)

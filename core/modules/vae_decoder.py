@@ -4,7 +4,6 @@ from PIL import Image
 
 from .util import BoringModule, should_run_on_gpu
 from enum import Enum
-from ..data.model_data import ModelData
 
 def nonlinearity(x):
     # swish
@@ -164,6 +163,7 @@ class VAEDecoder(BoringModule):
         super().__init__()
 
         if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
             layers = ModelData.load(layers)
 
         self.decoder = Decoder()

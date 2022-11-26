@@ -1,13 +1,10 @@
 import os
-from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
+from core import samplers
 from core.modules.clip import CLIPEmbedder, PromptBuilder
 from core.modules.vae_decoder import VAEDecoder
 from core.data import ModelData
 from core.modules.stable_diffusion import StableDiffusion
 import models
-
-import gc
-import torch
 
 def save_images(samples):
     base_count = len(os.listdir("outputs"))
@@ -21,7 +18,7 @@ def main():
     # This speeds up merging models on the fly a lot (near instant), but uses more VRAM
     sd_unet = ModelData.load(models.unet.SD1_5_fp32, device="cuda").half_()
     print("Loaded", sd_unet.info.name)
-    wd_unet = ModelData.load(models.unet.WD1_3_fp32, device="cuda")
+    wd_unet = ModelData.load(models.unet.WD1_3_fp32, device="cuda").half_()
     print("Loaded", wd_unet.info.name)
 
     print("Creating UNet")
@@ -30,14 +27,14 @@ def main():
     model = StableDiffusion(None, use_fp16=True, device="cuda")
 
     print("Creating VAE Decoder")
-    decoder = VAEDecoder(ModelData.load(models.decoder.VAEDec1_4_fp32)).cuda()
-
-    seed = 42
+    decoder = VAEDecoder(models.decoder.VAEDec1_5mse_fp32).cuda()
 
     print("Creating CLIP Embedder")
     clip = CLIPEmbedder().cuda()
     # Using an empty negative prompt, but it's possible to create complex ones with PromptBuilder
     negative_prompt = clip([""])
+
+    seed = 42
 
     print("Sampling")
     for i in range(6):
@@ -56,11 +53,11 @@ def main():
         model.set(merged)
 
         # Run the denoising, creating the image (in latent space)
-        sample = EulerASampler(model).sample(
+        sample = samplers.DPMpp2SaKarrasSampler(model).sample(
             seed,
             512, 512, 1,
             prompt, 
-            negative_prompt, 7.5, 20
+            negative_prompt, 7.5, 8
         )
 
         # Decode the images from latent space

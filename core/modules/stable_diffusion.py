@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from enum import Enum
 import pytorch_lightning as pl
 from functools import partial
 
@@ -12,7 +13,14 @@ class StableDiffusion(pl.LightningModule, BoringModuleMixin):
         super().__init__()
         self.diffusion_model = UNetModel(use_fp16=use_fp16, device=device)
 
+        if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
+            layers = ModelData.load(layers, device)
+            if use_fp16:
+                layers.half_()
+
         self.set(layers)
+        del layers
         
         print("Setting eval")
         self.eval()

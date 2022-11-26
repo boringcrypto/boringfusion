@@ -1,5 +1,5 @@
 import os
-from core.samplers import EulerASampler, DDIMSampler, PLMSSampler
+from core import samplers
 from core.modules.clip import CLIPEmbedder, PromptBuilder
 from core.modules.vae_decoder import VAEDecoder
 from core.data import ModelData
@@ -19,10 +19,14 @@ def main():
     print("Loading UNets")
     # Loading the models to GPU
     # This speeds up merging models on the fly a lot (near instant), but uses more VRAM
-    sd_unet = ModelData.load(models.unet.SD1_5_fp32, device="cpu").half_()
+    sd_unet = ModelData.load(models.unet.SD1_5_fp32, device="cuda").half_()
     print("Loaded", sd_unet.info.name)
-    wd_unet = ModelData.load(models.unet.WD1_3_fp32, device="cpu").half_()
-    print("Loaded", wd_unet.info.name)
+    for name in models.unet:
+        wd_unet = ModelData.load(models.unet[name.name], device="cuda").half_()
+        try:
+            print(sd_unet.compare_to(wd_unet), wd_unet.info.name)
+        except:
+            pass
 
     print("Creating UNet")
     # Creating the UNet model in fp16 precision directly on the GPU
@@ -73,11 +77,11 @@ def main():
         model.set(merged)
 
         # Run the denoising, creating the image (in latent space)
-        sample = DDIMSampler(model).sample(
+        sample = samplers.DPMpp2SaKarrasSampler(model).sample(
             seed,
             512, 512, 1,
             prompt, 
-            negative_prompt, 7.5, 40
+            negative_prompt, 7.5, 8
         )
 
         # Decode the images from latent space

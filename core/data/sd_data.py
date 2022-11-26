@@ -3,10 +3,6 @@ import torch
 from core import diffusers_mappings
 from core.safe_unpickler import torch_load
 from .model_data import ModelData
-try:
-    from model_map_backup import map
-except:
-    from model_map import map
 
 def treeify(items):
     tree = {}
@@ -17,6 +13,29 @@ def treeify(items):
             t = t.setdefault(part, {})
     
     return tree
+
+
+class StableDiffusionDataImporter:
+    def import_checkpoint(self, filename):
+        source_name = os.path.split(filename)[1]
+
+        checkpoint_data = torch_load(filename, map_location='cpu')
+
+        state_dict = checkpoint_data["state_dict"] if 'state_dict' in checkpoint_data.keys() else checkpoint_data
+        key_tree = treeify(state_dict.keys())
+
+        if "cond_stage_model" in key_tree:
+            if "transformer" in key_tree["cond_stage_model"]:
+                # The Novel AI ckpt skips the text_model part
+                clip_base_key = "cond_stage_model.transformer.text_model." if "text_model" in key_tree["cond_stage_model"]["transformer"] else "cond_stage_model.transformer."
+                ModelData("CLIP Encoder", 197) \
+                    .set_from_state_dict(state_dict, clip_base_key, prepend="text_model.") \
+                    .save_native(source_name, "data/clip-text-encoder/", map)
+            elif "model" in key_tree["cond_stage_model"]:
+                print(key_tree["cond_stage_model"]["model"].keys())
+
+        return self
+
 
 
 class StableDiffusionData:
@@ -35,6 +54,7 @@ class StableDiffusionData:
 
         state_dict = checkpoint_data["state_dict"] if 'state_dict' in checkpoint_data.keys() else checkpoint_data
         key_tree = treeify(state_dict.keys())
+        print(key_tree["cond_stage_model"].keys())
 
         if "cond_stage_model" in key_tree:
             # The Novel AI ckpt skips the text_model part
@@ -78,33 +98,39 @@ class StableDiffusionData:
     def load_diffusers(self, directory):
         self.filename = os.path.basename(os.path.normpath(directory))
 
-        clip_text_encoder_layers = torch_load(os.path.join(directory, "text_encoder", "pytorch_model.bin"), map_location='cpu')
-        self.clip_text_encoder_layers.set_from_state_dict(clip_text_encoder_layers, "text_model.")
+        clip_filename = os.path.join(directory, "text_encoder", "pytorch_model.bin")
+        if os.path.exists(clip_filename):
+            clip_text_encoder_layers = torch_load(clip_filename, map_location='cpu')
+            self.clip_text_encoder_layers.set_from_state_dict(clip_text_encoder_layers, "text_model.")
 
-        vae_layers = torch_load(os.path.join(directory, "vae", "diffusion_pytorch_model.bin"), map_location='cpu')
+        vae_filename = os.path.join(directory, "vae", "diffusion_pytorch_model.bin")
+        if os.path.exists(vae_filename):
+            vae_layers = torch_load(vae_filename, map_location='cpu')
 
-        self.vae_decoder_layers.set_from_state_dict(vae_layers, "decoder.", diffusers_mappings.vae_decoder, "decoder.")
-        self.vae_decoder_layers["post_quant_conv.bias"] = vae_layers["post_quant_conv.bias"]
-        self.vae_decoder_layers["post_quant_conv.weight"] = vae_layers["post_quant_conv.weight"]
-        self.vae_decoder_layers.layer_count += 2
-        # These layers have the correct number of elements, but coem in a different shape
-        self.vae_decoder_layers['decoder.mid.attn_1.k.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['decoder.mid.attn_1.proj_out.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['decoder.mid.attn_1.q.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_decoder_layers['decoder.mid.attn_1.v.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_decoder_layers.set_from_state_dict(vae_layers, "decoder.", diffusers_mappings.vae_decoder, "decoder.")
+            self.vae_decoder_layers["post_quant_conv.bias"] = vae_layers["post_quant_conv.bias"]
+            self.vae_decoder_layers["post_quant_conv.weight"] = vae_layers["post_quant_conv.weight"]
+            self.vae_decoder_layers.layer_count += 2
+            # These layers have the correct number of elements, but coem in a different shape
+            self.vae_decoder_layers['decoder.mid.attn_1.k.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_decoder_layers['decoder.mid.attn_1.proj_out.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_decoder_layers['decoder.mid.attn_1.q.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_decoder_layers['decoder.mid.attn_1.v.weight'] = self.vae_decoder_layers['decoder.mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
 
-        self.vae_encoder_layers.set_from_state_dict(vae_layers, "encoder.", diffusers_mappings.vae_encoder, "encoder.")
-        self.vae_encoder_layers["quant_conv.bias"] = vae_layers["quant_conv.bias"]
-        self.vae_encoder_layers["quant_conv.weight"] = vae_layers["quant_conv.weight"]
-        self.vae_encoder_layers.layer_count += 2
-        # These layers have the correct number of elements, but coem in a different shape
-        self.vae_encoder_layers['encoder.mid.attn_1.k.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['encoder.mid.attn_1.proj_out.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['encoder.mid.attn_1.q.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
-        self.vae_encoder_layers['encoder.mid.attn_1.v.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_encoder_layers.set_from_state_dict(vae_layers, "encoder.", diffusers_mappings.vae_encoder, "encoder.")
+            self.vae_encoder_layers["quant_conv.bias"] = vae_layers["quant_conv.bias"]
+            self.vae_encoder_layers["quant_conv.weight"] = vae_layers["quant_conv.weight"]
+            self.vae_encoder_layers.layer_count += 2
+            # These layers have the correct number of elements, but coem in a different shape
+            self.vae_encoder_layers['encoder.mid.attn_1.k.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.k.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_encoder_layers['encoder.mid.attn_1.proj_out.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.proj_out.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_encoder_layers['encoder.mid.attn_1.q.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.q.weight'].reshape(torch.Size([512, 512, 1, 1]))
+            self.vae_encoder_layers['encoder.mid.attn_1.v.weight'] = self.vae_encoder_layers['encoder.mid.attn_1.v.weight'].reshape(torch.Size([512, 512, 1, 1]))
 
-        unet_layers = torch_load(os.path.join(directory, "unet", "diffusion_pytorch_model.bin"), map_location='cpu')
-        self.unet_layers.set_from_state_dict(unet_layers, "", diffusers_mappings.unet)
+        unet_filename = os.path.join(directory, "unet", "diffusion_pytorch_model.bin")
+        if os.path.exists(unet_filename):
+            unet_layers = torch_load(unet_filename, map_location='cpu')
+            self.unet_layers.set_from_state_dict(unet_layers, "", diffusers_mappings.unet)
 
         return self
 
@@ -130,9 +156,7 @@ class StableDiffusionData:
             self.vae_decoder_layers["post_quant_conv.weight"] = data["post_quant_conv.weight"]
             self.vae_decoder_layers.layer_count += 2
 
-        # print(data.keys())
-
-    def save_native(self):
+    def save_native(self, map):
         self.clip_text_encoder_layers.save_native(self.filename, "data/clip-text-encoder/", map)
         self.vae_encoder_layers.save_native(self.filename, "data/vae-encoder/", map)
         self.vae_decoder_layers.save_native(self.filename, "data/vae-decoder/", map)

@@ -226,18 +226,6 @@ class ModelData(OrderedDict):
                 if source_name not in map[self.version_hash].found_in:
                     map[self.version_hash].found_in.append(source_name)
 
-            full_module = 'from core.data import ModelMap, ModelDataInfo\n\nmap = ' + str(map)
-
-            # Saving a backup first, just in case the save gets interupted halfway through
-            with open('model_map_backup.py', 'w') as f:
-                f.write(full_module)
-
-            with open('model_map.py', 'w') as f:
-                f.write(full_module)
-
-            # Remove the backup after a succesful save
-            os.remove('model_map_backup.py')
-
     def merge_(self, model, weight=0.5):
         """Merge with another model (in place)
 
@@ -275,6 +263,23 @@ class ModelData(OrderedDict):
             combined[key] = self[key] + (trained_model[key] - base_model[key]) * weight
 
         return combined
+
+    def compare_to(self, layers):
+        total = torch.tensor(0, dtype=torch.float64, device=self.device)
+        changes = torch.tensor(0, dtype=torch.float64, device=self.device)
+        for key in self.keys():
+            diff = torch.abs(self[key] - layers[key])
+            total += diff.sum(dtype=torch.float64)
+            changes += diff.gt(0.0005).sum(dtype=torch.float64)
+
+        return total.item(), changes.item() / 1000000
+
+    @property
+    def device(self):
+        if len(self):
+            return list(self.values())[0].device
+        else:
+            return "cuda"
 
     def __str__(self):
         if len(self):

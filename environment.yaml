@@ -15,3 +15,4 @@ dependencies:
     - einops==0.5.0
     - transformers==4.19.2
     - k_diffusion==0.0.10
+    - open_clip_torch==2.7.0

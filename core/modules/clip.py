@@ -2,11 +2,70 @@ from typing import List
 import os
 import torch
 import torch.nn as nn
+import numpy as np
+from enum import Enum
+
 from transformers import CLIPTokenizer, CLIPTextModel
 
 from .util import BoringModule, should_run_on_gpu
+from open_clip.model import _build_text_tower
 
 TRANSFORMER_STATE_DICT_PATH = "core/data/clip-transformer/pytorch_model.bin"
+
+class CLIPBase(BoringModule):
+    def embed(self, prompt, max_length=77, padding="max_length"):
+        pass
+
+    def encode(self, input_embeddings):
+        pass
+
+    def forward(self, prompt_or_prompts: str or List[str]):
+        pass
+
+class OpenCLIP(BoringModule):
+    def __init__(self, layers=None):
+        """The CLIPEmbedder turns prompts into 77 tokens with 768 dimensions for use with Stable Diffusion.
+        By default the model will live in CPU memory and will be moved onto the GPU only while needed. After you
+        call `.cuda()` it will live in GPU memory until manually moved back.
+        """
+        super().__init__()
+
+        if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
+            layers = ModelData.load(layers)
+
+        text = _build_text_tower(1024, 
+            {
+                "context_length": 77,
+                "vocab_size": 49408,
+                "width": 1024,
+                "heads": 16,
+                "layers": 24
+            }, False, torch.float32)
+        self.transformer = text.transformer
+        self.vocab_size = text.vocab_size
+        self.token_embedding = text.token_embedding
+        self.positional_embedding = text.positional_embedding
+        self.ln_final = text.ln_final
+        self.text_projection = text.text_projection
+        self.register_buffer('attn_mask', text.attn_mask, persistent=False)
+
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+
+    def encode_text(self, text, normalize: bool = False):
+        cast_dtype = self.transformer.get_cast_dtype()
+
+        x = self.token_embedding(text).to(cast_dtype)  # [batch_size, n_ctx, d_model]
+
+        x = x + self.positional_embedding.to(cast_dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x, attn_mask=self.attn_mask)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.ln_final(x)  # [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+        return F.normalize(x, dim=-1) if normalize else x
+
 
 class CLIPEmbedder(BoringModule):
     def __init__(self, layers=None):
@@ -15,6 +74,11 @@ class CLIPEmbedder(BoringModule):
         call `.cuda()` it will live in GPU memory until manually moved back.
         """
         super().__init__()
+
+        if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
+            layers = ModelData.load(layers)
+
         # The tokenizer has a vocabulary of 49407 tokens and runs on the cpu (not a module). Small memory footprint (few MB).
         self.tokenizer = CLIPTokenizer.from_pretrained("core/data/clip-tokenizer", local_files_only=True)
         # The transformer is a module of about 480MB.

@@ -199,8 +199,6 @@ class ResBlock(TimestepBlock):
 class UNetModel(nn.Module, BoringModuleMixin):
     """
     The full UNet model with attention and timestep embedding.
-    :param in_channels: channels in the input Tensor.
-    :param model_channels: base channel count for the model.
     :param out_channels: channels in the output Tensor.
     :param num_res_blocks: number of residual blocks per downsample.
     :param attention_resolutions: a collection of downsample rates at which
@@ -226,8 +224,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
     """
     def __init__(
         self,
-        in_channels=4,
-        model_channels=320,
         out_channels=4,
         num_res_blocks=2,
         attention_resolutions=[4, 2, 1],
@@ -258,8 +254,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
         if num_head_channels == -1:
             assert num_heads != -1, 'Either num_heads or num_head_channels has to be set'
 
-        self.in_channels = in_channels
-        self.model_channels = model_channels
         self.out_channels = out_channels
         self.num_res_blocks = num_res_blocks
         self.attention_resolutions = attention_resolutions
@@ -273,9 +267,9 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.num_heads_upsample = num_heads_upsample
         self.predict_codebook_ids = n_embed is not None
 
-        time_embed_dim = model_channels * 4
+        time_embed_dim = 320 * 4
         self.time_embed = nn.Sequential(
-            linear(model_channels, time_embed_dim, dtype=self.dtype, device=device),
+            linear(320, time_embed_dim, dtype=self.dtype, device=device),
             nn.SiLU(),
             linear(time_embed_dim, time_embed_dim, dtype=self.dtype, device=device),
         )
@@ -286,13 +280,13 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.input_blocks = nn.ModuleList(
             [
                 TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1, dtype=self.dtype, device=device)
+                    conv_nd(dims, 4, 320, 3, padding=1, dtype=self.dtype, device=device)
                 )
             ]
         )
-        self._feature_size = model_channels
-        input_block_chans = [model_channels]
-        ch = model_channels
+        self._feature_size = 320
+        input_block_chans = [320]
+        ch = 320
         ds = 1
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
@@ -300,7 +294,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                     ResBlock(
                         ch,
                         time_embed_dim,
-                        out_channels=mult * model_channels,
+                        out_channels=mult * 320,
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
@@ -308,7 +302,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         device=device
                     )
                 ]
-                ch = mult * model_channels
+                ch = mult * 320
                 if ds in attention_resolutions:
                     if num_head_channels == -1:
                         dim_head = ch // num_heads
@@ -392,14 +386,14 @@ class UNetModel(nn.Module, BoringModuleMixin):
                     ResBlock(
                         ch + ich,
                         time_embed_dim,
-                        out_channels=model_channels * mult,
+                        out_channels=320 * mult,
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                         dtype=self.dtype, device=device
                     )
                 ]
-                ch = model_channels * mult
+                ch = 320 * mult
                 if ds in attention_resolutions:
                     if num_head_channels == -1:
                         dim_head = ch // num_heads
@@ -437,12 +431,12 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.out = nn.Sequential(
             normalization(ch, device=device),
             nn.SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1, dtype=self.dtype, device=device)),
+            zero_module(conv_nd(dims, 320, out_channels, 3, padding=1, dtype=self.dtype, device=device)),
         )
         if self.predict_codebook_ids:
             self.id_predictor = nn.Sequential(
             normalization(ch, device=device),
-            conv_nd(dims, model_channels, n_embed, 1, dtype=self.dtype, device=device),
+            conv_nd(dims, 320, n_embed, 1, dtype=self.dtype, device=device),
             #nn.LogSoftmax(dim=1)  # change to cross_entropy and produce non-normalized logits
         )
 
@@ -459,7 +453,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
         hs = []
-        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False, dtype=self.dtype, device=self.device)
+        t_emb = timestep_embedding(timesteps, 320, repeat_only=False, dtype=self.dtype, device=self.device)
         emb = self.time_embed(t_emb)
         context = context.to(device=self.device, dtype=self.dtype)
 
