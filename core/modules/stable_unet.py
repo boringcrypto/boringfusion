@@ -47,14 +47,14 @@ class Upsample(nn.Module):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1, dtype=torch.float32, device="cuda"):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1, padding_mode="zeros", dtype=torch.float32, device="cuda"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.dims = dims
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding, dtype=dtype, device=device)
+            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding, padding_mode=padding_mode, dtype=dtype, device=device)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -77,7 +77,7 @@ class Downsample(nn.Module):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1, dtype=torch.float32, device="cuda"):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1, padding_mode="zeros", dtype=torch.float32, device="cuda"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -85,7 +85,7 @@ class Downsample(nn.Module):
         self.dims = dims
         stride = 2 if dims != 3 else (1, 2, 2)
         self.op = conv_nd(
-            dims, self.channels, self.out_channels, 3, stride=stride, padding=padding, dtype=dtype, device=device
+            dims, self.channels, self.out_channels, 3, stride=stride, padding=padding, padding_mode=padding_mode, dtype=dtype, device=device
         )
 
     def forward(self, x):
@@ -119,6 +119,7 @@ class ResBlock(TimestepBlock):
         use_checkpoint=False,
         up=False,
         down=False,
+        padding_mode="zeros",
         dtype=torch.float32,
         device="cuda"
     ):
@@ -133,7 +134,7 @@ class ResBlock(TimestepBlock):
         self.in_layers = nn.Sequential(
             normalization(channels, device=device),
             nn.SiLU(),
-            conv_nd(dims, channels, self.out_channels, 3, padding=1, dtype=dtype, device=device),
+            conv_nd(dims, channels, self.out_channels, 3, padding=1, padding_mode=padding_mode, dtype=dtype, device=device),
         )
 
         self.updown = up or down
@@ -160,7 +161,7 @@ class ResBlock(TimestepBlock):
             nn.SiLU(),
             DummyModule(),
             zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, dtype=dtype, device=device)
+                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, padding_mode=padding_mode, dtype=dtype, device=device)
             ),
         )
 
@@ -168,10 +169,10 @@ class ResBlock(TimestepBlock):
             self.skip_connection = nn.Identity()
         elif use_conv:
             self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1, dtype=dtype, device=device
+                dims, channels, self.out_channels, 3, padding=1, padding_mode=padding_mode, dtype=dtype, device=device
             )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, dtype=dtype, device=device)
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, padding_mode=padding_mode, dtype=dtype, device=device)
 
     def forward(self, x, emb):
         if self.updown:
@@ -224,6 +225,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
     """
     def __init__(
         self,
+        padding_mode="zeros",
         out_channels=4,
         num_res_blocks=2,
         attention_resolutions=[4, 2, 1],
@@ -240,6 +242,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
         resblock_updown=False,
         transformer_depth=1,              # custom transformer support
         context_dim=768,                 # custom transformer support
+        use_linear_in_transformer=False,
         n_embed=None,                     # custom support for prediction of discrete ids into codebook of first stage vq model
         legacy=False,
         device="cuda"
@@ -280,7 +283,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.input_blocks = nn.ModuleList(
             [
                 TimestepEmbedSequential(
-                    conv_nd(dims, 4, 320, 3, padding=1, dtype=self.dtype, device=device)
+                    conv_nd(dims, 4, 320, 3, padding=1, padding_mode=padding_mode, dtype=self.dtype, device=device)
                 )
             ]
         )
@@ -298,6 +301,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        padding_mode=padding_mode,
                         dtype=self.dtype,
                         device=device
                     )
@@ -315,7 +319,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
 
                     layers.append(
                         SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
+                            ch, num_heads, dim_head, padding_mode, depth=transformer_depth, context_dim=context_dim, use_linear=use_linear_in_transformer, dtype=self.dtype, device=device
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -333,12 +337,13 @@ class UNetModel(nn.Module, BoringModuleMixin):
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
+                            padding_mode=padding_mode,
                             dtype=self.dtype,
                             device=device
                         )
                         if resblock_updown
                         else Downsample(
-                            ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype, device=device
+                            ch, conv_resample, dims=dims, out_channels=out_ch, padding_mode=padding_mode, dtype=self.dtype, device=device
                         )
                     )
                 )
@@ -362,10 +367,11 @@ class UNetModel(nn.Module, BoringModuleMixin):
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
+                padding_mode=padding_mode,
                 dtype=self.dtype, device=device
             ),
             SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
+                            ch, num_heads, dim_head, padding_mode, depth=transformer_depth, context_dim=context_dim, use_linear=use_linear_in_transformer, dtype=self.dtype, device=device
                         ),
             ResBlock(
                 ch,
@@ -373,6 +379,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
+                padding_mode=padding_mode,
                 dtype=self.dtype, device=device
             ),
         )
@@ -390,6 +397,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        padding_mode=padding_mode,
                         dtype=self.dtype, device=device
                     )
                 ]
@@ -405,7 +413,7 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         dim_head = ch // num_heads
                     layers.append(
                         SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, dtype=self.dtype, device=device
+                            ch, num_heads, dim_head, padding_mode, depth=transformer_depth, context_dim=context_dim, use_linear=use_linear_in_transformer, dtype=self.dtype, device=device
                         )
                     )
                 if level and i == num_res_blocks:
@@ -419,10 +427,11 @@ class UNetModel(nn.Module, BoringModuleMixin):
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             up=True,
+                            padding_mode=padding_mode,
                             dtype=self.dtype, device=device
                         )
                         if resblock_updown
-                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch, dtype=self.dtype, device=device)
+                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch, padding_mode=padding_mode, dtype=self.dtype, device=device)
                     )
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
@@ -431,12 +440,12 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.out = nn.Sequential(
             normalization(ch, device=device),
             nn.SiLU(),
-            zero_module(conv_nd(dims, 320, out_channels, 3, padding=1, dtype=self.dtype, device=device)),
+            zero_module(conv_nd(dims, 320, out_channels, 3, padding=1, padding_mode=padding_mode, dtype=self.dtype, device=device)),
         )
         if self.predict_codebook_ids:
             self.id_predictor = nn.Sequential(
             normalization(ch, device=device),
-            conv_nd(dims, 320, n_embed, 1, dtype=self.dtype, device=device),
+            conv_nd(dims, 320, n_embed, 1, padding_mode=padding_mode, dtype=self.dtype, device=device),
             #nn.LogSoftmax(dim=1)  # change to cross_entropy and produce non-normalized logits
         )
 

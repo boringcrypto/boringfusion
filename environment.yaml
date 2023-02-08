@@ -16,3 +16,8 @@ dependencies:
     - transformers==4.19.2
     - k_diffusion==0.0.10
     - open_clip_torch==2.7.0
+    - opencv-python==4.6.0.66
+    - imutils==0.5.4
+    - timm==0.6.12
+    - omegaconf==2.1.1
+    - invisible-watermark>=0.1.5

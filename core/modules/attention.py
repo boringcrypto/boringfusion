@@ -165,44 +165,74 @@ class SpatialTransformer(nn.Module):
     Then apply standard transformer action.
     Finally, reshape to image
     """
-    def __init__(self, in_channels, n_heads, d_head,
-                 depth=1, context_dim=None, dtype=torch.float32, device="cuda"):
+    def __init__(self, in_channels, n_heads, d_head, padding_mode, 
+                 depth=1, context_dim=None, use_linear=False, dtype=torch.float32, device="cuda"):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
         self.norm = Normalize(in_channels, dtype, device=device)
 
-        self.proj_in = nn.Conv2d(in_channels,
-                                 inner_dim,
-                                 kernel_size=1,
-                                 stride=1,
-                                 padding=0,
-                                 dtype=dtype,
-                                 device=device
-                                 )
+        if use_linear:
+            self.proj_in = nn.Linear(
+                in_channels,
+                inner_dim,
+                dtype=dtype,
+                device=device
+            )
+        else:
+            self.proj_in = nn.Conv2d(
+                in_channels,
+                inner_dim,
+                padding_mode=padding_mode,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                dtype=dtype,
+                device=device
+            )
 
         self.transformer_blocks = nn.ModuleList(
             [BasicTransformerBlock(inner_dim, n_heads, d_head, context_dim=context_dim, dtype=dtype, device=device)
                 for d in range(depth)]
         )
 
-        self.proj_out = zero_module(nn.Conv2d(inner_dim,
-                                              in_channels,
-                                              kernel_size=1,
-                                              stride=1,
-                                              padding=0,
-                                              dtype=dtype,
-                                              device=device))
+        if use_linear:
+            self.proj_out = zero_module(nn.Linear(
+                in_channels, 
+                inner_dim,
+                dtype=dtype,
+                device=device
+            ))
+        else:
+            self.proj_out = zero_module(nn.Conv2d(
+                inner_dim,
+                in_channels,
+                padding_mode=padding_mode,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                dtype=dtype,
+                device=device
+            ))
+        self.use_linear = use_linear
 
     def forward(self, x, context=None):
         # note: if no context is given, cross-attention defaults to self-attention
+        if not isinstance(context, list):
+            context = [context]
         b, c, h, w = x.shape
         x_in = x
         x = self.norm(x)
-        x = self.proj_in(x)
-        x = rearrange(x, 'b c h w -> b (h w) c')
-        for block in self.transformer_blocks:
-            x = block(x, context=context)
-        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
-        x = self.proj_out(x)
+        if not self.use_linear:
+            x = self.proj_in(x)
+        x = rearrange(x, 'b c h w -> b (h w) c').contiguous()
+        if self.use_linear:
+            x = self.proj_in(x)
+        for i, block in enumerate(self.transformer_blocks):
+            x = block(x, context=context[i])
+        if self.use_linear:
+            x = self.proj_out(x)
+        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w).contiguous()
+        if not self.use_linear:
+            x = self.proj_out(x)
         return x + x_in

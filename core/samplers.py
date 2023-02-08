@@ -106,7 +106,7 @@ class Sampler(BoringModule):
         seed_everything(seed if seed != RANDOM_SEED else random.randint(0, 1000000000))
 
     @torch.no_grad()
-    def sample(self, seed: int, width: int, height: int, batch_size: int, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, cfg: float, steps: int, callback = None):
+    def sample(self, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, width = 512, height = 512, batch_size = 1, cfg = 7.5, steps = 20, seed = RANDOM_SEED, callback = None):
         """Create images from prompt
 
         Args:

@@ -16,7 +16,7 @@ def treeify(items):
 
 
 class StableDiffusionDataImporter:
-    def import_checkpoint(self, filename):
+    def import_checkpoint(self, filename, map):
         source_name = os.path.split(filename)[1]
 
         checkpoint_data = torch_load(filename, map_location='cpu')
@@ -54,9 +54,9 @@ class StableDiffusionData:
 
         state_dict = checkpoint_data["state_dict"] if 'state_dict' in checkpoint_data.keys() else checkpoint_data
         key_tree = treeify(state_dict.keys())
-        print(key_tree["cond_stage_model"].keys())
 
-        if "cond_stage_model" in key_tree:
+        if "cond_stage_model" in key_tree and "transformer" in key_tree["cond_stage_model"]:
+            print(key_tree["cond_stage_model"].keys())
             # The Novel AI ckpt skips the text_model part
             clip_base_key = "cond_stage_model.transformer.text_model." if "text_model" in key_tree["cond_stage_model"]["transformer"] else "cond_stage_model.transformer."
             self.clip_text_encoder_layers.set_from_state_dict(state_dict, clip_base_key, prepend="text_model.")

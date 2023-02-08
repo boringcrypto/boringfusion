@@ -4,3 +4,7 @@ __pycache__
 /htmlcov
 .coverage
 models.py
+*.ckpt
+Texture Types.xlsx
+.vscode/launch.json
+core/data/open-clip-transformer/pytorch_model.bin

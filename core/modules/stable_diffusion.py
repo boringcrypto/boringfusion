@@ -9,9 +9,15 @@ from .stable_unet import UNetModel
 
 
 class StableDiffusion(pl.LightningModule, BoringModuleMixin):
-    def __init__(self, layers=None, use_fp16=False, device="cuda"):
+    def __init__(self, layers=None, use_fp16=False, context_dim=768, use_linear_in_transformer=False, tiling=False, device="cuda"):
         super().__init__()
-        self.diffusion_model = UNetModel(use_fp16=use_fp16, device=device)
+        self.diffusion_model = UNetModel(
+            context_dim=context_dim,
+            use_linear_in_transformer=use_linear_in_transformer,
+            padding_mode="circular" if tiling else "zeros",
+            use_fp16=use_fp16, 
+            device=device
+        )
 
         if isinstance(layers, Enum):
             from ..data.model_data import ModelData

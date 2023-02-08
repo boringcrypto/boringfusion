@@ -17,10 +17,11 @@ class Importer():
         ]
 
         if not len(found) or not all(found):
-            data = StableDiffusionDataImporter()
-            data.import_checkpoint(filename)
+            data = StableDiffusionData()
+            data.load_checkpoint(filename, self.map)
             print(data)
             print()
+            data.save_native(self.map)
             self.save_map()
 
     def import_diffusers(self, directory):
