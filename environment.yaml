@@ -6,8 +6,8 @@ channels:
 dependencies:
   - python=3.10.6
   - pip=22.2.2
-  - pytorch::pytorch=1.13.0
-  - torchvision=0.14.0
+  - pytorch::pytorch=1.13.1
+  - torchvision=0.14.1
   - numpy=1.23.3
   - pytorch-cuda=11.7
   - pip:
@@ -21,3 +21,4 @@ dependencies:
     - timm==0.6.12
     - omegaconf==2.1.1
     - invisible-watermark>=0.1.5
+    - xformers==0.0.16

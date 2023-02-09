@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+import PIL
 from PIL import Image
 from einops import rearrange
 from pytorch_lightning import seed_everything
@@ -8,10 +9,21 @@ from torch import autocast
 from ddpm import LatentDiffusion
 
 from ddim import DDIMSampler
-from plms import PLMSSampler
 from dpm_solver import DPMSolverSampler
+from util import repeat
 
 torch.set_grad_enabled(False)
+
+def load_img(path):
+    image = Image.open(path).convert("RGB")
+    w, h = image.size
+    print(f"loaded input image of size ({w}, {h}) from {path}")
+    w, h = map(lambda x: x - x % 64, (w, h))  # resize to integer multiple of 64
+    image = image.resize((w, h), resample=PIL.Image.LANCZOS)
+    image = np.array(image).astype(np.float32) / 255.0
+    image = image[None].transpose(0, 3, 1, 2)
+    image = torch.from_numpy(image)
+    return 2. * image - 1.
 
 def main():
     seed_everything(42)
@@ -41,8 +53,7 @@ def main():
     model.cuda()
     model.eval()
 
-    # sampler = PLMSSampler(model, device=device)
-    # sampler = DPMSolverSampler(model, device=device)
+    # sampler = DPMSolverSampler(model, device=torch.device("cuda"))
     sampler = DDIMSampler(model, device=torch.device("cuda"))
 
     outdir = "outputs/txt2img-samples"
@@ -53,25 +64,45 @@ def main():
     sample_count = 0
     base_count = len(os.listdir(outdir))
 
-    start_code = None
+    steps = 50
+    strength = 0
+    actual_steps = int(strength * steps)
+    print(f"target t_enc is {actual_steps} steps")
     scale = 9.0
+
+    # sampling
+    shape = [4, 768 // 8, 768 // 8]
+    C, H, W = shape
+    size = (batch_size, C, H, W)
+
+    init_img = "rick.jpeg"
+    init_image = load_img(init_img).to("cuda")
+    init_image = repeat(init_image, '1 ... -> b ...', b=batch_size)
+    init_latent = model.get_first_stage_encoding(model.encode_first_stage(init_image))  # move to latent space
+
+    noise = torch.randn(size, device="cuda")
+
     with torch.no_grad(), autocast("cuda"), model.ema_scope():
         uc = None
         if scale != 1.0:
             uc = model.get_learned_conditioning(batch_size * [""])
-        c = model.get_learned_conditioning(["a professional photograph of an astronaut riding a triceratops"])
+        c = model.get_learned_conditioning(["michael jackson"])
 
-        shape = [4, 768 // 8, 768 // 8]
-        samples, _ = sampler.sample(
-            S=50,
-            conditioning=c,
-            batch_size=1,
-            shape=shape,
-            verbose=False,
+        sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
+
+        # encode (scaled latent)
+        if actual_steps < steps:
+            z_enc = sampler.stochastic_encode(init_latent, torch.tensor([actual_steps] * batch_size).to("cuda"), noise=noise)
+        else:
+            z_enc = noise
+
+        # decode it
+        samples = sampler.decode(
+            z_enc,
+            c,
+            actual_steps,
             unconditional_guidance_scale=scale,
-            unconditional_conditioning=uc,
-            eta=0.0,
-            x_T=start_code
+            unconditional_conditioning=uc
         )
 
         x_samples = model.decode_first_stage(samples)
