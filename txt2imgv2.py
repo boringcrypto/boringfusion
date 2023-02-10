@@ -35,15 +35,6 @@ def main():
     sd = pl_sd["state_dict"]
     model = LatentDiffusion(
         parameterization = "v",
-        linear_start = 0.00085,
-        linear_end = 0.0120,
-        num_timesteps_cond = 1,
-        log_every_t = 200,
-        timesteps = 1000,
-        image_size = 64,
-        channels = 4,
-        monitor = "val/loss_simple_ema",
-        scale_factor = 0.18215,
     )
     
     model.load_state_dict(sd, strict=False)

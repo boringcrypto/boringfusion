@@ -92,7 +92,7 @@ class Sampler(BoringModule):
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
-        betas = make_beta_schedule("linear", 1000, linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
+        betas = make_beta_schedule()
         alphas = 1. - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)
         alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
