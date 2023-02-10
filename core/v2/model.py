@@ -6,7 +6,7 @@ import numpy as np
 from einops import rearrange
 from typing import Optional, Any
 
-from attention import MemoryEfficientCrossAttention
+from .attention import MemoryEfficientCrossAttention
 
 try:
     import xformers

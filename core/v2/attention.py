@@ -6,7 +6,7 @@ from torch import nn, einsum
 from einops import rearrange, repeat
 from typing import Optional, Any
 
-from util import checkpoint
+from .util import checkpoint
 
 
 try:

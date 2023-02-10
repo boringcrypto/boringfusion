@@ -2,19 +2,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pytorch_lightning as pl
-from einops import rearrange
 from contextlib import contextmanager
 from functools import partial
-from tqdm import tqdm
-from torchvision.utils import make_grid
 
-from util import exists, default, count_params
-from ema import LitEma
-from distributions import DiagonalGaussianDistribution
-from autoencoder import AutoencoderKL
-from util import make_beta_schedule, extract_into_tensor
-from modules import FrozenOpenCLIPEmbedder
-from openaimodel import UNetModel
+from .util import exists, default, count_params
+from .ema import LitEma
+from .util import make_beta_schedule, extract_into_tensor
+from .openaimodel import UNetModel
 
 
 __conditioning_keys__ = {'concat': 'c_concat',
@@ -43,7 +37,6 @@ class DDPM(pl.LightningModule):
                  load_only_unet=False,
                  monitor="val/loss",
                  use_ema=True,
-                 first_stage_key="image",
                  image_size=256,
                  channels=3,
                  log_every_t=100,
@@ -70,10 +63,9 @@ class DDPM(pl.LightningModule):
         assert parameterization in ["eps", "x0", "v"], 'currently only supporting "eps" and "x0" and "v"'
         self.parameterization = parameterization
         print(f"{self.__class__.__name__}: Running in {self.parameterization}-prediction mode")
-        self.cond_stage_model = None
+        # self.cond_stage_model = None
         self.clip_denoised = clip_denoised
         self.log_every_t = log_every_t
-        self.first_stage_key = first_stage_key
         self.image_size = image_size  # try conv?
         self.channels = channels
         self.use_positional_encodings = use_positional_encodings
@@ -212,10 +204,10 @@ class LatentDiffusion(DDPM):
 
     def __init__(self,
                  num_timesteps_cond=None,
-                 cond_stage_key="image",
-                 cond_stage_trainable=False,
+                #  cond_stage_key="image",
+                #  cond_stage_trainable=False,
                  concat_mode=True,
-                 cond_stage_forward=None,
+                #  cond_stage_forward=None,
                  conditioning_key=None,
                  scale_factor=1.0,
                  scale_by_std=False,
@@ -234,8 +226,8 @@ class LatentDiffusion(DDPM):
         ignore_keys = kwargs.pop("ignore_keys", [])
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
         self.concat_mode = concat_mode
-        self.cond_stage_trainable = cond_stage_trainable
-        self.cond_stage_key = cond_stage_key
+        # self.cond_stage_trainable = cond_stage_trainable
+        # self.cond_stage_key = cond_stage_key
         try:
             self.num_downs = 3
         except:
@@ -244,9 +236,8 @@ class LatentDiffusion(DDPM):
             self.scale_factor = scale_factor
         else:
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
-        self.instantiate_first_stage()
-        self.instantiate_cond_stage()
-        self.cond_stage_forward = cond_stage_forward
+        # self.instantiate_cond_stage()
+        # self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
         self.bbox_tokenizer = None
 
@@ -278,86 +269,28 @@ class LatentDiffusion(DDPM):
         if self.shorten_cond_schedule:
             self.make_cond_schedule()
 
-    def instantiate_first_stage(self):
-        model = AutoencoderKL(
-            embed_dim = 4,
-            monitor = "val/rec_loss",
-            ddconfig = {
-                "double_z": True,
-                "z_channels": 4,
-                "resolution": 256,
-                "in_channels": 3,
-                "out_ch": 3,
-                "ch": 128,
-                "ch_mult": [1, 2, 4, 4],
-                "num_res_blocks": 2,
-                "attn_resolutions": [],
-                "dropout": 0.0
-            }
-        )
-        self.first_stage_model = model.eval()
-        self.first_stage_model.train = disabled_train
-        for param in self.first_stage_model.parameters():
-            param.requires_grad = False
+    # def instantiate_cond_stage(self):
+    #     model = FrozenOpenCLIPEmbedder(
+    #         freeze = True,
+    #         layer = "penultimate"
+    #     )
+    #     self.cond_stage_model = model.eval()
+    #     self.cond_stage_model.train = disabled_train
+    #     for param in self.cond_stage_model.parameters():
+    #         param.requires_grad = False
 
-    def instantiate_cond_stage(self):
-        model = FrozenOpenCLIPEmbedder(
-            freeze = True,
-            layer = "penultimate"
-        )
-        self.cond_stage_model = model.eval()
-        self.cond_stage_model.train = disabled_train
-        for param in self.cond_stage_model.parameters():
-            param.requires_grad = False
-
-    def _get_denoise_row_from_list(self, samples, desc='', force_no_decoder_quantization=False):
-        denoise_row = []
-        for zd in tqdm(samples, desc=desc):
-            denoise_row.append(self.decode_first_stage(zd.to(self.device),
-                                                       force_not_quantize=force_no_decoder_quantization))
-        n_imgs_per_row = len(denoise_row)
-        denoise_row = torch.stack(denoise_row)  # n_log_step, n_row, C, H, W
-        denoise_grid = rearrange(denoise_row, 'n b c h w -> b n c h w')
-        denoise_grid = rearrange(denoise_grid, 'b n c h w -> (b n) c h w')
-        denoise_grid = make_grid(denoise_grid, nrow=n_imgs_per_row)
-        return denoise_grid
-
-    def get_first_stage_encoding(self, encoder_posterior):
-        if isinstance(encoder_posterior, DiagonalGaussianDistribution):
-            z = encoder_posterior.sample()
-        elif isinstance(encoder_posterior, torch.Tensor):
-            z = encoder_posterior
-        else:
-            raise NotImplementedError(f"encoder_posterior of type '{type(encoder_posterior)}' not yet implemented")
-        return self.scale_factor * z
-
-    def get_learned_conditioning(self, c):
-        if self.cond_stage_forward is None:
-            if hasattr(self.cond_stage_model, 'encode') and callable(self.cond_stage_model.encode):
-                c = self.cond_stage_model.encode(c)
-                if isinstance(c, DiagonalGaussianDistribution):
-                    c = c.mode()
-            else:
-                c = self.cond_stage_model(c)
-        else:
-            assert hasattr(self.cond_stage_model, self.cond_stage_forward)
-            c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
-        return c
-
-    @torch.no_grad()
-    def encode_first_stage(self, x):
-        return self.first_stage_model.encode(x)
-
-    @torch.no_grad()
-    def decode_first_stage(self, z, predict_cids=False, force_not_quantize=False):
-        if predict_cids:
-            if z.dim() == 4:
-                z = torch.argmax(z.exp(), dim=1).long()
-            z = self.first_stage_model.quantize.get_codebook_entry(z, shape=None)
-            z = rearrange(z, 'b h w c -> b c h w').contiguous()
-
-        z = 1. / self.scale_factor * z
-        return self.first_stage_model.decode(z)
+    # def get_learned_conditioning(self, c):
+    #     if self.cond_stage_forward is None:
+    #         if hasattr(self.cond_stage_model, 'encode') and callable(self.cond_stage_model.encode):
+    #             c = self.cond_stage_model.encode(c)
+    #             if isinstance(c, DiagonalGaussianDistribution):
+    #                 c = c.mode()
+    #         else:
+    #             c = self.cond_stage_model(c)
+    #     else:
+    #         assert hasattr(self.cond_stage_model, self.cond_stage_forward)
+    #         c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
+    #     return c
 
     def apply_model(self, x_noisy, t, cond, return_ids=False):
         if isinstance(cond, dict):

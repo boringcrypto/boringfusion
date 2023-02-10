@@ -3,11 +3,11 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from contextlib import contextmanager
 
-from model import Encoder, Decoder
-from distributions import DiagonalGaussianDistribution
+from .model import Encoder, Decoder
+from .distributions import DiagonalGaussianDistribution
 
-from util import instantiate_from_config
-from ema import LitEma
+from .util import instantiate_from_config
+from .ema import LitEma
 
 
 class AutoencoderKL(pl.LightningModule):

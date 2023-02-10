@@ -6,7 +6,7 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
-from util import (
+from .util import (
     checkpoint,
     conv_nd,
     linear,
@@ -15,8 +15,8 @@ from util import (
     normalization,
     timestep_embedding,
 )
-from attention import SpatialTransformer
-from util import exists
+from .attention import SpatialTransformer
+from .util import exists
 
 
 # dummy replace
