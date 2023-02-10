@@ -8,7 +8,6 @@ from .util import conv_nd, linear, zero_module, normalization, timestep_embeddin
 from .attention import SpatialTransformer
 
 
-
 class TimestepBlock(nn.Module):
     """
     Any module where forward() takes timestep embeddings as a second argument.
@@ -103,7 +102,6 @@ class ResBlock(TimestepBlock):
         convolution instead of a smaller 1x1 convolution to change the
         channels in the skip connection.
     :param dims: determines if the signal is 1D, 2D, or 3D.
-    :param use_checkpoint: if True, use gradient checkpointing on this module.
     :param up: if True, use this block for upsampling.
     :param down: if True, use this block for downsampling.
     """
@@ -116,7 +114,6 @@ class ResBlock(TimestepBlock):
         use_conv=False,
         use_scale_shift_norm=False,
         dims=2,
-        use_checkpoint=False,
         up=False,
         down=False,
         padding_mode="zeros",
@@ -128,7 +125,6 @@ class ResBlock(TimestepBlock):
         self.emb_channels = emb_channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
-        self.use_checkpoint = use_checkpoint
         self.use_scale_shift_norm = use_scale_shift_norm
 
         self.in_layers = nn.Sequential(
@@ -212,7 +208,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
     :param dims: determines if the signal is 1D, 2D, or 3D.
     :param num_classes: if specified (as an int), then this model will be
         class-conditional with `num_classes` classes.
-    :param use_checkpoint: use gradient checkpointing to reduce memory usage.
     :param num_heads: the number of attention heads in each attention layer.
     :param num_heads_channels: if specified, ignore num_heads and instead use
                                a fixed channel width per attention head.
@@ -233,7 +228,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
         conv_resample=True,
         dims=2,
         num_classes=None,
-        use_checkpoint=False,
         use_fp16=False,
         num_heads=8,
         num_head_channels=-1,
@@ -263,7 +257,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
         self.channel_mult = channel_mult
         self.conv_resample = conv_resample
         self.num_classes = num_classes
-        self.use_checkpoint = use_checkpoint
         self.dtype = torch.float16 if use_fp16 else torch.float32
         self.num_heads = num_heads
         self.num_head_channels = num_head_channels
@@ -299,7 +292,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         time_embed_dim,
                         out_channels=mult * 320,
                         dims=dims,
-                        use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                         padding_mode=padding_mode,
                         dtype=self.dtype,
@@ -334,7 +326,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                             time_embed_dim,
                             out_channels=out_ch,
                             dims=dims,
-                            use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
                             padding_mode=padding_mode,
@@ -365,7 +356,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                 ch,
                 time_embed_dim,
                 dims=dims,
-                use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
                 padding_mode=padding_mode,
                 dtype=self.dtype, device=device
@@ -377,7 +367,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                 ch,
                 time_embed_dim,
                 dims=dims,
-                use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
                 padding_mode=padding_mode,
                 dtype=self.dtype, device=device
@@ -395,7 +384,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                         time_embed_dim,
                         out_channels=320 * mult,
                         dims=dims,
-                        use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                         padding_mode=padding_mode,
                         dtype=self.dtype, device=device
@@ -424,7 +412,6 @@ class UNetModel(nn.Module, BoringModuleMixin):
                             time_embed_dim,
                             out_channels=out_ch,
                             dims=dims,
-                            use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             up=True,
                             padding_mode=padding_mode,

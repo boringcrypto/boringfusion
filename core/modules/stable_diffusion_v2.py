@@ -5,10 +5,8 @@ import pytorch_lightning as pl
 from contextlib import contextmanager
 from functools import partial
 
-from .util import exists, default, count_params
-from .ema import LitEma
-from .util import make_beta_schedule, extract_into_tensor
-from .openaimodel import UNetModel
+from .util import exists, default, make_beta_schedule, extract_into_tensor
+from .stable_unet_v2 import UNetModel
 
 
 __conditioning_keys__ = {'concat': 'c_concat',
@@ -25,7 +23,6 @@ def disabled_train(self, mode=True):
 def uniform_on_device(r1, r2, shape, device):
     return (r1 - r2) * torch.rand(*shape, device=device) + r2
 
-
 class DDPM(pl.LightningModule):
     # classic DDPM with Gaussian diffusion, in image space
     def __init__(self,
@@ -36,11 +33,9 @@ class DDPM(pl.LightningModule):
                  ignore_keys=[],
                  load_only_unet=False,
                  monitor="val/loss",
-                 use_ema=True,
                  image_size=256,
                  channels=3,
                  log_every_t=100,
-                 clip_denoised=True,
                  linear_start=1e-4,
                  linear_end=2e-2,
                  cosine_s=8e-3,
@@ -48,7 +43,6 @@ class DDPM(pl.LightningModule):
                  original_elbo_weight=0.,
                  v_posterior=0.,  # weight for choosing posterior variance as sigma = (1-v) * beta_tilde + v * beta
                  l_simple_weight=1.,
-                 conditioning_key=None,
                  parameterization="eps",  # all assuming fixed variance schedules
                  scheduler_config=None,
                  use_positional_encodings=False,
@@ -56,25 +50,15 @@ class DDPM(pl.LightningModule):
                  logvar_init=0.,
                  make_it_fit=False,
                  ucg_training=None,
-                 reset_ema=False,
-                 reset_num_ema_updates=False,
                  ):
         super().__init__()
-        assert parameterization in ["eps", "x0", "v"], 'currently only supporting "eps" and "x0" and "v"'
         self.parameterization = parameterization
         print(f"{self.__class__.__name__}: Running in {self.parameterization}-prediction mode")
-        # self.cond_stage_model = None
-        self.clip_denoised = clip_denoised
         self.log_every_t = log_every_t
         self.image_size = image_size  # try conv?
         self.channels = channels
         self.use_positional_encodings = use_positional_encodings
-        self.model = DiffusionWrapper(conditioning_key)
-        count_params(self.model, verbose=True)
-        self.use_ema = use_ema
-        if self.use_ema:
-            self.model_ema = LitEma(self.model)
-            print(f"Keeping EMAs of {len(list(self.model_ema.buffers()))}.")
+        self.model = DiffusionWrapper()
 
         self.use_scheduler = scheduler_config is not None
         if self.use_scheduler:
@@ -87,17 +71,8 @@ class DDPM(pl.LightningModule):
         if monitor is not None:
             self.monitor = monitor
         self.make_it_fit = make_it_fit
-        if reset_ema: assert exists(ckpt_path)
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys, only_model=load_only_unet)
-            if reset_ema:
-                assert self.use_ema
-                print(f"Resetting ema to pure model weights. This is useful when restoring from an ema-only checkpoint.")
-                self.model_ema = LitEma(self.model)
-        if reset_num_ema_updates:
-            print(" +++++++++++ WARNING: RESETTING NUM_EMA UPDATES TO ZERO +++++++++++ ")
-            assert self.use_ema
-            self.model_ema.reset_num_updates()
 
         self.register_schedule(given_betas=given_betas, beta_schedule=beta_schedule, timesteps=timesteps,
                                linear_start=linear_start, linear_end=linear_end, cosine_s=cosine_s)
@@ -169,21 +144,6 @@ class DDPM(pl.LightningModule):
         self.register_buffer('lvlb_weights', lvlb_weights, persistent=False)
         assert not torch.isnan(self.lvlb_weights).all()
 
-    @contextmanager
-    def ema_scope(self, context=None):
-        if self.use_ema:
-            self.model_ema.store(self.model.parameters())
-            self.model_ema.copy_to(self.model)
-            if context is not None:
-                print(f"{context}: Switched to EMA weights")
-        try:
-            yield None
-        finally:
-            if self.use_ema:
-                self.model_ema.restore(self.model.parameters())
-                if context is not None:
-                    print(f"{context}: Restored training weights")
-
     def predict_start_from_z_and_v(self, x_t, t, v):
         # self.register_buffer('sqrt_alphas_cumprod', to_torch(np.sqrt(alphas_cumprod)))
         # self.register_buffer('sqrt_one_minus_alphas_cumprod', to_torch(np.sqrt(1. - alphas_cumprod)))
@@ -204,56 +164,24 @@ class LatentDiffusion(DDPM):
 
     def __init__(self,
                  num_timesteps_cond=None,
-                #  cond_stage_key="image",
-                #  cond_stage_trainable=False,
-                 concat_mode=True,
-                #  cond_stage_forward=None,
-                 conditioning_key=None,
                  scale_factor=1.0,
-                 scale_by_std=False,
-                 force_null_conditioning=False,
                  *args, **kwargs):
-        self.force_null_conditioning = force_null_conditioning
         self.num_timesteps_cond = default(num_timesteps_cond, 1)
-        self.scale_by_std = scale_by_std
         assert self.num_timesteps_cond <= kwargs['timesteps']
-        # for backwards compatibility after implementation of DiffusionWrapper
-        if conditioning_key is None:
-            conditioning_key = 'concat' if concat_mode else 'crossattn'
         ckpt_path = kwargs.pop("ckpt_path", None)
-        reset_ema = kwargs.pop("reset_ema", False)
-        reset_num_ema_updates = kwargs.pop("reset_num_ema_updates", False)
         ignore_keys = kwargs.pop("ignore_keys", [])
-        super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
-        self.concat_mode = concat_mode
-        # self.cond_stage_trainable = cond_stage_trainable
-        # self.cond_stage_key = cond_stage_key
+        super().__init__(*args, **kwargs)
         try:
             self.num_downs = 3
         except:
             self.num_downs = 0
-        if not scale_by_std:
-            self.scale_factor = scale_factor
-        else:
-            self.register_buffer('scale_factor', torch.tensor(scale_factor))
-        # self.instantiate_cond_stage()
-        # self.cond_stage_forward = cond_stage_forward
-        self.clip_denoised = False
+        self.scale_factor = scale_factor
         self.bbox_tokenizer = None
 
         self.restarted_from_ckpt = False
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys)
             self.restarted_from_ckpt = True
-            if reset_ema:
-                assert self.use_ema
-                print(
-                    f"Resetting ema to pure model weights. This is useful when restoring from an ema-only checkpoint.")
-                self.model_ema = LitEma(self.model)
-        if reset_num_ema_updates:
-            print(" +++++++++++ WARNING: RESETTING NUM_EMA UPDATES TO ZERO +++++++++++ ")
-            assert self.use_ema
-            self.model_ema.reset_num_updates()
 
     def make_cond_schedule(self, ):
         self.cond_ids = torch.full(size=(self.num_timesteps,), fill_value=self.num_timesteps - 1, dtype=torch.long)
@@ -269,40 +197,11 @@ class LatentDiffusion(DDPM):
         if self.shorten_cond_schedule:
             self.make_cond_schedule()
 
-    # def instantiate_cond_stage(self):
-    #     model = FrozenOpenCLIPEmbedder(
-    #         freeze = True,
-    #         layer = "penultimate"
-    #     )
-    #     self.cond_stage_model = model.eval()
-    #     self.cond_stage_model.train = disabled_train
-    #     for param in self.cond_stage_model.parameters():
-    #         param.requires_grad = False
-
-    # def get_learned_conditioning(self, c):
-    #     if self.cond_stage_forward is None:
-    #         if hasattr(self.cond_stage_model, 'encode') and callable(self.cond_stage_model.encode):
-    #             c = self.cond_stage_model.encode(c)
-    #             if isinstance(c, DiagonalGaussianDistribution):
-    #                 c = c.mode()
-    #         else:
-    #             c = self.cond_stage_model(c)
-    #     else:
-    #         assert hasattr(self.cond_stage_model, self.cond_stage_forward)
-    #         c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
-    #     return c
-
     def apply_model(self, x_noisy, t, cond, return_ids=False):
-        if isinstance(cond, dict):
-            # hybrid case, cond is expected to be a dict
-            pass
-        else:
-            if not isinstance(cond, list):
-                cond = [cond]
-            key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
-            cond = {key: cond}
+        if not isinstance(cond, list):
+            cond = [cond]
 
-        x_recon = self.model(x_noisy, t, **cond)
+        x_recon = self.model(x_noisy, t, cond)
 
         if isinstance(x_recon, tuple) and not return_ids:
             return x_recon[0]
@@ -311,11 +210,9 @@ class LatentDiffusion(DDPM):
 
 
 class DiffusionWrapper(pl.LightningModule):
-    def __init__(self, conditioning_key):
+    def __init__(self):
         super().__init__()
-        self.sequential_cross_attn = False
         self.diffusion_model = UNetModel(
-            use_checkpoint = True,
             use_fp16 = True,
             image_size = 32,
             in_channels = 4,
@@ -331,45 +228,16 @@ class DiffusionWrapper(pl.LightningModule):
             context_dim = 1024,
             legacy = False
         )
-        self.conditioning_key = conditioning_key
-        assert self.conditioning_key in [None, 'concat', 'crossattn', 'hybrid', 'adm', 'hybrid-adm', 'crossattn-adm']
 
-    def forward(self, x, t, c_concat: list = None, c_crossattn: list = None, c_adm=None):
-        if self.conditioning_key is None:
-            out = self.diffusion_model(x, t)
-        elif self.conditioning_key == 'concat':
-            xc = torch.cat([x] + c_concat, dim=1)
-            out = self.diffusion_model(xc, t)
-        elif self.conditioning_key == 'crossattn':
-            if not self.sequential_cross_attn:
-                cc = torch.cat(c_crossattn, 1)
-            else:
-                cc = c_crossattn
-            if hasattr(self, "scripted_diffusion_model"):
-                # TorchScript changes names of the arguments
-                # with argument cc defined as context=cc scripted model will produce
-                # an error: RuntimeError: forward() is missing value for argument 'argument_3'.
-                out = self.scripted_diffusion_model(x, t, cc)
-            else:
-                out = self.diffusion_model(x, t, context=cc)
-        elif self.conditioning_key == 'hybrid':
-            xc = torch.cat([x] + c_concat, dim=1)
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(xc, t, context=cc)
-        elif self.conditioning_key == 'hybrid-adm':
-            assert c_adm is not None
-            xc = torch.cat([x] + c_concat, dim=1)
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(xc, t, context=cc, y=c_adm)
-        elif self.conditioning_key == 'crossattn-adm':
-            assert c_adm is not None
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(x, t, context=cc, y=c_adm)
-        elif self.conditioning_key == 'adm':
-            cc = c_crossattn[0]
-            out = self.diffusion_model(x, t, y=cc)
+    def forward(self, x, t, c_crossattn: list = None):
+        cc = torch.cat(c_crossattn, 1)
+        if hasattr(self, "scripted_diffusion_model"):
+            # TorchScript changes names of the arguments
+            # with argument cc defined as context=cc scripted model will produce
+            # an error: RuntimeError: forward() is missing value for argument 'argument_3'.
+            out = self.scripted_diffusion_model(x, t, cc)
         else:
-            raise NotImplementedError()
+            out = self.diffusion_model(x, t, context=cc)
 
         return out
 

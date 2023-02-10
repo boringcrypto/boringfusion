@@ -6,11 +6,10 @@ from PIL import Image
 from einops import rearrange
 from pytorch_lightning import seed_everything
 from torch import autocast
-from core.v2.ddpm import LatentDiffusion
+from core.modules.stable_diffusion_v2 import LatentDiffusion
 
-from core.v2.ddim import DDIMSampler
-from core.v2.dpm_solver import DPMSolverSampler
-from core.v2.util import repeat
+from core.modules.ddim2 import DDIMSampler
+from core.modules.util import repeat
 from core.modules.vae_decoder import VAEDecoder
 from core.modules.vae_encoder import VAEEncoder
 from core.modules.clip import OpenCLIPEmbedder
@@ -41,14 +40,10 @@ def main():
         num_timesteps_cond = 1,
         log_every_t = 200,
         timesteps = 1000,
-        # cond_stage_key = "txt",
         image_size = 64,
         channels = 4,
-        # cond_stage_trainable = False,
-        conditioning_key = "crossattn",
         monitor = "val/loss_simple_ema",
         scale_factor = 0.18215,
-        use_ema = False # we set this to false because this is an inference only config
     )
     
     model.load_state_dict(sd, strict=False)
@@ -58,7 +53,6 @@ def main():
 
     clip = OpenCLIPEmbedder().cuda()
 
-    # sampler = DPMSolverSampler(model, device=torch.device("cuda"))
     sampler = DDIMSampler(model, device=torch.device("cuda"))
 
     outdir = "outputs/txt2img-samples"
@@ -76,7 +70,7 @@ def main():
     size = (batch_size, C, H, W)
     noise = torch.randn(size, device="cuda")
 
-    with torch.no_grad(), autocast("cuda"), model.ema_scope():
+    with torch.no_grad(), autocast("cuda"):
         sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
 
         # decode it
@@ -108,7 +102,7 @@ def main():
 
     for i in range(35, 36):
         actual_steps = i
-        with torch.no_grad(), autocast("cuda"), model.ema_scope():
+        with torch.no_grad(), autocast("cuda"):
             sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
 
             # encode (scaled latent)
