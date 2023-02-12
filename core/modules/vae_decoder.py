@@ -15,9 +15,9 @@ def Normalize(in_channels, num_groups=32):
 
 
 class Upsample(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, padding_mode):
         super().__init__()
-        self.conv = torch.nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
+        self.conv = torch.nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1, padding_mode=padding_mode)
 
     def forward(self, x):
         x = torch.nn.functional.interpolate(x, scale_factor=2.0, mode="nearest")
@@ -26,17 +26,17 @@ class Upsample(nn.Module):
 
 
 class ResnetBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, padding_mode):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
 
         self.norm1 = Normalize(in_channels)
-        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, padding_mode=padding_mode)
         self.norm2 = Normalize(out_channels)
-        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, padding_mode=padding_mode)
         if self.in_channels != self.out_channels:
-            self.nin_shortcut = torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+            self.nin_shortcut = torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, padding_mode=padding_mode)
 
     def forward(self, x):
         h = x
@@ -55,14 +55,14 @@ class ResnetBlock(nn.Module):
 
 
 class AttnBlock(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, padding_mode):
         super().__init__()
 
         self.norm = Normalize(in_channels)
-        self.q = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.k = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.v = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.proj_out = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
+        self.q = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0, padding_mode=padding_mode)
+        self.k = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0, padding_mode=padding_mode)
+        self.v = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0, padding_mode=padding_mode)
+        self.proj_out = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0, padding_mode=padding_mode)
 
     def forward(self, x):
         h_ = x
@@ -92,17 +92,17 @@ class AttnBlock(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, padding_mode="zeros"):
         super().__init__()
 
         # z to block_in
-        self.conv_in = torch.nn.Conv2d(4, 512, kernel_size=3, stride=1, padding=1)
+        self.conv_in = torch.nn.Conv2d(4, 512, kernel_size=3, stride=1, padding=1, padding_mode=padding_mode)
 
         # middle
         self.mid = nn.Module()
-        self.mid.block_1 = ResnetBlock(512, 512)
-        self.mid.attn_1 = AttnBlock(512)
-        self.mid.block_2 = ResnetBlock(512, 512)
+        self.mid.block_1 = ResnetBlock(512, 512, padding_mode=padding_mode)
+        self.mid.attn_1 = AttnBlock(512, padding_mode=padding_mode)
+        self.mid.block_2 = ResnetBlock(512, 512, padding_mode=padding_mode)
 
         # upsampling
         block_in = 512
@@ -113,19 +113,19 @@ class Decoder(nn.Module):
             attn = nn.ModuleList()
             block_out = 128*[1, 2, 4, 4][i_level]
             for i in range(3):
-                block.append(ResnetBlock(block_in, block_out))
+                block.append(ResnetBlock(block_in, block_out, padding_mode=padding_mode))
                 block_in = block_out
             up = nn.Module()
             up.block = block
             up.attn = attn
             if i_level != 0:
-                up.upsample = Upsample(block_in)
+                up.upsample = Upsample(block_in, padding_mode=padding_mode)
                 curr_res = curr_res * 2
             self.up.insert(0, up) # prepend to get consistent order
 
         # end
         self.norm_out = Normalize(block_in)
-        self.conv_out = torch.nn.Conv2d(block_in, 3, kernel_size=3, stride=1, padding=1)
+        self.conv_out = torch.nn.Conv2d(block_in, 3, kernel_size=3, stride=1, padding=1, padding_mode=padding_mode)
 
     def forward(self, z):
         # z to block_in
@@ -158,7 +158,7 @@ class Decoder(nn.Module):
         return h
 
 class VAEDecoder(BoringModule):
-    def __init__(self, layers=None):
+    def __init__(self, layers=None, tiling=False):
         # TODO: Pass in device and create directly on that device
         super().__init__()
 
@@ -166,7 +166,7 @@ class VAEDecoder(BoringModule):
             from ..data.model_data import ModelData
             layers = ModelData.load(layers)
 
-        self.decoder = Decoder()
+        self.decoder = Decoder(padding_mode = "circular" if tiling else "zeros")
         self.post_quant_conv = torch.nn.Conv2d(4, 4, 1)
         self.set(layers)
         self.eval()

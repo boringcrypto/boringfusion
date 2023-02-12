@@ -14,6 +14,7 @@ from .util import (
     zero_module,
     normalization,
     timestep_embedding,
+    BoringModuleMixin
 )
 from .attention_v2 import SpatialTransformer
 
@@ -37,11 +38,12 @@ class AttentionPool2d(nn.Module):
         embed_dim: int,
         num_heads_channels: int,
         output_dim: int = None,
+        padding_mode = "zeros"
     ):
         super().__init__()
         self.positional_embedding = nn.Parameter(th.randn(embed_dim, spacial_dim ** 2 + 1) / embed_dim ** 0.5)
-        self.qkv_proj = conv_nd(1, embed_dim, 3 * embed_dim, 1)
-        self.c_proj = conv_nd(1, embed_dim, output_dim or embed_dim, 1)
+        self.qkv_proj = conv_nd(1, embed_dim, 3 * embed_dim, 1, padding_mode=padding_mode)
+        self.c_proj = conv_nd(1, embed_dim, output_dim or embed_dim, 1, padding_mode=padding_mode)
         self.num_heads = embed_dim // num_heads_channels
         self.attention = QKVAttention(self.num_heads)
 
@@ -94,14 +96,14 @@ class Upsample(nn.Module):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=1, padding_mode="zeros"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.dims = dims
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding)
+            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding, padding_mode=padding_mode)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -137,7 +139,7 @@ class Downsample(nn.Module):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None,padding=1, padding_mode="zeros"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -146,7 +148,7 @@ class Downsample(nn.Module):
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
             self.op = conv_nd(
-                dims, self.channels, self.out_channels, 3, stride=stride, padding=padding
+                dims, self.channels, self.out_channels, 3, stride=stride, padding=padding, padding_mode=padding_mode
             )
         else:
             assert self.channels == self.out_channels
@@ -183,6 +185,7 @@ class ResBlock(TimestepBlock):
         dims=2,
         up=False,
         down=False,
+        padding_mode="zeros"
     ):
         super().__init__()
         self.channels = channels
@@ -195,17 +198,17 @@ class ResBlock(TimestepBlock):
         self.in_layers = nn.Sequential(
             normalization(channels),
             nn.SiLU(),
-            conv_nd(dims, channels, self.out_channels, 3, padding=1),
+            conv_nd(dims, channels, self.out_channels, 3, padding=1, padding_mode=padding_mode),
         )
 
         self.updown = up or down
 
         if up:
-            self.h_upd = Upsample(channels, False, dims)
-            self.x_upd = Upsample(channels, False, dims)
+            self.h_upd = Upsample(channels, False, dims, padding_mode=padding_mode)
+            self.x_upd = Upsample(channels, False, dims, padding_mode=padding_mode)
         elif down:
-            self.h_upd = Downsample(channels, False, dims)
-            self.x_upd = Downsample(channels, False, dims)
+            self.h_upd = Downsample(channels, False, dims, padding_mode=padding_mode)
+            self.x_upd = Downsample(channels, False, dims, padding_mode=padding_mode)
         else:
             self.h_upd = self.x_upd = nn.Identity()
 
@@ -221,7 +224,7 @@ class ResBlock(TimestepBlock):
             nn.SiLU(),
             nn.Dropout(p=dropout),
             zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
+                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, padding_mode=padding_mode)
             ),
         )
 
@@ -232,7 +235,7 @@ class ResBlock(TimestepBlock):
                 dims, channels, self.out_channels, 3, padding=1
             )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, padding_mode=padding_mode)
 
     def forward(self, x, emb):
         if self.updown:
@@ -386,7 +389,7 @@ class QKVAttention(nn.Module):
         return count_flops_attn(model, _x, y)
 
 
-class UNetModel(nn.Module):
+class UNetModel(nn.Module, BoringModuleMixin):
     """
     The full UNet model with attention and timestep embedding.
     :param in_channels: channels in the input Tensor.
@@ -444,6 +447,7 @@ class UNetModel(nn.Module):
         num_attention_blocks=None,
         disable_middle_self_attn=False,
         use_linear_in_transformer=False,
+        padding_mode="zeros"
     ):
         super().__init__()
         if use_spatial_transformer:
@@ -516,7 +520,7 @@ class UNetModel(nn.Module):
         self.input_blocks = nn.ModuleList(
             [
                 TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1)
+                    conv_nd(dims, in_channels, model_channels, 3, padding=1, padding_mode=padding_mode)
                 )
             ]
         )
@@ -533,7 +537,8 @@ class UNetModel(nn.Module):
                         dropout,
                         out_channels=mult * model_channels,
                         dims=dims,
-                        use_scale_shift_norm=use_scale_shift_norm,
+                        use_scale_shift_norm=use_scale_shift_norm, 
+                        padding_mode=padding_mode,
                     )
                 ]
                 ch = mult * model_channels
@@ -560,7 +565,8 @@ class UNetModel(nn.Module):
                                 use_new_attention_order=use_new_attention_order,
                             ) if not use_spatial_transformer else SpatialTransformer(
                                 ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,
-                                disable_self_attn=disabled_sa, use_linear=use_linear_in_transformer,
+                                disable_self_attn=disabled_sa, use_linear=use_linear_in_transformer, 
+                                padding_mode=padding_mode,
                             )
                         )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -578,10 +584,11 @@ class UNetModel(nn.Module):
                             dims=dims,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
+                            padding_mode=padding_mode
                         )
                         if resblock_updown
                         else Downsample(
-                            ch, conv_resample, dims=dims, out_channels=out_ch
+                            ch, conv_resample, dims=dims, out_channels=out_ch, padding_mode=padding_mode
                         )
                     )
                 )
@@ -604,7 +611,8 @@ class UNetModel(nn.Module):
                 time_embed_dim,
                 dropout,
                 dims=dims,
-                use_scale_shift_norm=use_scale_shift_norm,
+                use_scale_shift_norm=use_scale_shift_norm, 
+                padding_mode=padding_mode,
             ),
             AttentionBlock(
                 ch,
@@ -614,13 +622,15 @@ class UNetModel(nn.Module):
             ) if not use_spatial_transformer else SpatialTransformer(  # always uses a self-attn
                             ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,
                             disable_self_attn=disable_middle_self_attn, use_linear=use_linear_in_transformer,
+                            padding_mode=padding_mode
                         ),
             ResBlock(
                 ch,
                 time_embed_dim,
                 dropout,
                 dims=dims,
-                use_scale_shift_norm=use_scale_shift_norm,
+                use_scale_shift_norm=use_scale_shift_norm, 
+                padding_mode=padding_mode,
             ),
         )
         self._feature_size += ch
@@ -636,7 +646,8 @@ class UNetModel(nn.Module):
                         dropout,
                         out_channels=model_channels * mult,
                         dims=dims,
-                        use_scale_shift_norm=use_scale_shift_norm,
+                        use_scale_shift_norm=use_scale_shift_norm, 
+                        padding_mode=padding_mode,
                     )
                 ]
                 ch = model_channels * mult
@@ -664,6 +675,7 @@ class UNetModel(nn.Module):
                             ) if not use_spatial_transformer else SpatialTransformer(
                                 ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,
                                 disable_self_attn=disabled_sa, use_linear=use_linear_in_transformer,
+                                padding_mode=padding_mode
                             )
                         )
                 if level and i == self.num_res_blocks[level]:
@@ -676,10 +688,11 @@ class UNetModel(nn.Module):
                             out_channels=out_ch,
                             dims=dims,
                             use_scale_shift_norm=use_scale_shift_norm,
-                            up=True,
+                            up=True, 
+                            padding_mode=padding_mode,
                         )
                         if resblock_updown
-                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch)
+                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch, padding_mode=padding_mode)
                     )
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
@@ -688,7 +701,7 @@ class UNetModel(nn.Module):
         self.out = nn.Sequential(
             normalization(ch),
             nn.SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1, padding_mode=padding_mode)),
         )
         if self.predict_codebook_ids:
             self.id_predictor = nn.Sequential(
@@ -726,14 +739,15 @@ class UNetModel(nn.Module):
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
         hs = []
-        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
+        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False, dtype=self.dtype, device=self.device)
         emb = self.time_embed(t_emb)
+        context = context.to(device=self.device, dtype=self.dtype)
 
         if self.num_classes is not None:
             assert y.shape[0] == x.shape[0]
             emb = emb + self.label_emb(y)
 
-        h = x.type(self.dtype)
+        h = x.to(device=self.device, dtype=self.dtype)
         for module in self.input_blocks:
             h = module(h, emb, context)
             hs.append(h)
@@ -741,7 +755,7 @@ class UNetModel(nn.Module):
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb, context)
-        h = h.type(x.dtype)
+        h = h.type(self.dtype)
         if self.predict_codebook_ids:
             return self.id_predictor(h)
         else:

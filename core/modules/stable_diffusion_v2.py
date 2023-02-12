@@ -7,7 +7,8 @@ from functools import partial
 
 from .util import exists, default, make_beta_schedule, extract_into_tensor
 from .stable_unet_v2 import UNetModel
-
+from enum import Enum
+from .util import BoringModuleMixin
 
 __conditioning_keys__ = {'concat': 'c_concat',
                          'crossattn': 'c_crossattn',
@@ -23,42 +24,84 @@ def disabled_train(self, mode=True):
 def uniform_on_device(r1, r2, shape, device):
     return (r1 - r2) * torch.rand(*shape, device=device) + r2
 
-class LatentDiffusion(pl.LightningModule):
+
+class StableDiffusion(pl.LightningModule, BoringModuleMixin):
     # classic DDPM with Gaussian diffusion, in image space
-    def __init__(self,
-                 parameterization="eps",  # all assuming fixed variance schedules
-                 ):
+    def __init__(
+            self,
+            version=1,
+            layers=None,
+            parameterization="eps",
+            use_fp16=False,
+            tiling=False,
+            device="cuda"
+        ):
         super().__init__()
-        self.parameterization = parameterization
-        print(f"{self.__class__.__name__}: Running in {self.parameterization}-prediction mode")
-        self.model = DiffusionWrapper()
 
-        betas = make_beta_schedule()
-        alphas = 1. - betas
-        alphas_cumprod = np.cumprod(alphas, axis=0)
-        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
+        if version==1:
+            self.parameterization = "eps"
+            context_dim = 768
+            use_linear_in_transformer = False
+            num_head_channels = -1
+            num_heads = 8
+        else:
+            self.parameterization = parameterization
+            context_dim = 1024
+            use_linear_in_transformer = True
+            num_head_channels = 64
+            num_heads = -1
 
-        self.num_timesteps = 1000
-        assert alphas_cumprod.shape[0] == self.num_timesteps, 'alphas have to be defined for each timestep'
+        self.diffusion_model = UNetModel(
+            use_fp16 = use_fp16,
+            padding_mode = "circular" if tiling else "zeros",
+            in_channels = 4,
+            out_channels = 4,
+            model_channels = 320,
+            attention_resolutions = [ 4, 2, 1 ],
+            num_res_blocks = 2,
+            channel_mult = [ 1, 2, 4, 4 ],
+            num_head_channels = num_head_channels,
+            num_heads = num_heads,
+            use_spatial_transformer = True,
+            use_linear_in_transformer = use_linear_in_transformer,
+            transformer_depth = 1,
+            context_dim = context_dim,
+            legacy = False
+        )
 
-        to_torch = partial(torch.tensor, dtype=torch.float32)
+        # def check(layer):
+        #     if type(layer) == torch.nn.Conv2d:
+        #         print(layer.padding_mode)
+        #     for child in layer.children():
+        #         check(child)
 
-        self.register_buffer('betas', to_torch(betas))
-        self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
-        self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
+        # check(self.diffusion_model)
 
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer('sqrt_alphas_cumprod', to_torch(np.sqrt(alphas_cumprod)))
-        self.register_buffer('sqrt_one_minus_alphas_cumprod', to_torch(np.sqrt(1. - alphas_cumprod)))
-        self.register_buffer('log_one_minus_alphas_cumprod', to_torch(np.log(1. - alphas_cumprod)))
-        self.register_buffer('sqrt_recip_alphas_cumprod', to_torch(np.sqrt(1. / alphas_cumprod)))
-        self.register_buffer('sqrt_recipm1_alphas_cumprod', to_torch(np.sqrt(1. / alphas_cumprod - 1)))
+        if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
+            layers = ModelData.load(layers, device)
+            if use_fp16:
+                layers.half_()
+
+        self.set(layers)
+        del layers
+
+    def set(self, layers):
+        print("Loading State")
+        if layers is not None:
+            self.diffusion_model.load_state_dict(layers)
+
+    def forward(self, x, t, c_crossattn: list = None):
+        cc = torch.cat(c_crossattn, 1)
+        out = self.diffusion_model(x, t, context=cc)
+
+        return out
 
     def apply_model(self, x_noisy, t, cond, return_ids=False):
         if not isinstance(cond, list):
             cond = [cond]
 
-        x_recon = self.model(x_noisy, t, cond)
+        x_recon = self(x_noisy, t, cond)
 
         if isinstance(x_recon, tuple) and not return_ids:
             return x_recon[0]
@@ -66,35 +109,82 @@ class LatentDiffusion(pl.LightningModule):
             return x_recon
 
 
-class DiffusionWrapper(pl.LightningModule):
-    def __init__(self):
+class StableDiffusionUpscaler(pl.LightningModule, BoringModuleMixin):
+    def __init__(
+            self,
+            layers=None,
+            parameterization="v",
+            use_fp16=False,
+            tiling=False,
+            device="cuda"
+        ):
         super().__init__()
+
+        self.parameterization = parameterization
+
         self.diffusion_model = UNetModel(
-            use_fp16 = True,
-            in_channels = 4,
+            use_fp16 = use_fp16,
+            padding_mode = "circular" if tiling else "zeros",
+            in_channels = 7,
             out_channels = 4,
-            model_channels = 320,
-            attention_resolutions = [ 4, 2, 1 ],
+            model_channels = 256,
+            attention_resolutions = [ 2, 4, 8 ],
             num_res_blocks = 2,
-            channel_mult = [ 1, 2, 4, 4 ],
-            num_head_channels = 64,
+            channel_mult = [ 1, 2, 2, 4 ],
+            num_head_channels = -1,
+            num_heads = 8,
             use_spatial_transformer = True,
             use_linear_in_transformer = True,
             transformer_depth = 1,
             context_dim = 1024,
-            legacy = False
+            legacy = False,
+            disable_self_attentions = [True, True, True, False],
+            disable_middle_self_attn = False,
+            num_classes = 1000,
+            image_size = 128
         )
+
+        if isinstance(layers, Enum):
+            from ..data.model_data import ModelData
+            layers = ModelData.load(layers, device)
+            if use_fp16:
+                layers.half_()
+
+        self.set(layers)
+        del layers
+
+    def set(self, layers):
+        print("Loading State")
+        if layers is not None:
+            self.diffusion_model.load_state_dict(layers)
 
     def forward(self, x, t, c_crossattn: list = None):
         cc = torch.cat(c_crossattn, 1)
-        if hasattr(self, "scripted_diffusion_model"):
-            # TorchScript changes names of the arguments
-            # with argument cc defined as context=cc scripted model will produce
-            # an error: RuntimeError: forward() is missing value for argument 'argument_3'.
-            out = self.scripted_diffusion_model(x, t, cc)
-        else:
-            out = self.diffusion_model(x, t, context=cc)
+        out = self.diffusion_model(x, t, context=cc)
 
         return out
 
+    def apply_model(self, x_noisy, t, cond, return_ids=False):
+        if not isinstance(cond, list):
+            cond = [cond]
+
+        x_recon = self(x_noisy, t, cond)
+
+        if isinstance(x_recon, tuple) and not return_ids:
+            return x_recon[0]
+        else:
+            return x_recon
+
+
+
+    #     self.instantiate_low_stage(low_scale_config)
+    #     self.low_scale_key = low_scale_key
+    #     self.noise_level_key = noise_level_key
+
+    # def instantiate_low_stage(self, config):
+    #     model = instantiate_from_config(config)
+    #     self.low_scale_model = model.eval()
+    #     self.low_scale_model.train = disabled_train
+    #     for param in self.low_scale_model.parameters():
+    #         param.requires_grad = False
 

@@ -9,7 +9,7 @@ from einops import repeat
 import numpy as np
 from PIL import Image
 from tqdm.auto import trange, tqdm
-from .modules.ddim import DDIMSampler as rootDDIMSampler
+from .modules.ddim2 import DDIMSampler as rootDDIMSampler
 from .modules.plms import PLMSSampler as rootPLMSSampler
 from .modules.clip import PromptBuilder
 from .modules.util import BoringModule, should_run_on_gpu, make_beta_schedule

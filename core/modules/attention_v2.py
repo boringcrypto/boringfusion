@@ -78,7 +78,7 @@ def Normalize(in_channels):
 
 
 class SpatialSelfAttention(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, padding_mode="zeros"):
         super().__init__()
         self.in_channels = in_channels
 
@@ -87,22 +87,26 @@ class SpatialSelfAttention(nn.Module):
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0, 
+                                 padding_mode=padding_mode)
         self.k = torch.nn.Conv2d(in_channels,
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0, 
+                                 padding_mode=padding_mode)
         self.v = torch.nn.Conv2d(in_channels,
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0, 
+                                 padding_mode=padding_mode)
         self.proj_out = torch.nn.Conv2d(in_channels,
                                         in_channels,
                                         kernel_size=1,
                                         stride=1,
-                                        padding=0)
+                                        padding=0, 
+                                        padding_mode=padding_mode)
 
     def forward(self, x):
         h_ = x
@@ -269,7 +273,7 @@ class SpatialTransformer(nn.Module):
     """
     def __init__(self, in_channels, n_heads, d_head,
                  depth=1, dropout=0., context_dim=None,
-                 disable_self_attn=False, use_linear=False):
+                 disable_self_attn=False, use_linear=False, padding_mode="zeros"):
         super().__init__()
         if exists(context_dim) and not isinstance(context_dim, list):
             context_dim = [context_dim]
@@ -281,7 +285,8 @@ class SpatialTransformer(nn.Module):
                                      inner_dim,
                                      kernel_size=1,
                                      stride=1,
-                                     padding=0)
+                                     padding=0, 
+                                     padding_mode=padding_mode)
         else:
             self.proj_in = nn.Linear(in_channels, inner_dim)
 
@@ -295,7 +300,8 @@ class SpatialTransformer(nn.Module):
                                                   in_channels,
                                                   kernel_size=1,
                                                   stride=1,
-                                                  padding=0))
+                                                  padding=0,
+                                                  padding_mode=padding_mode))
         else:
             self.proj_out = zero_module(nn.Linear(in_channels, inner_dim))
         self.use_linear = use_linear
