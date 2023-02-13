@@ -55,7 +55,7 @@ map = ModelMap({
         "",
         "",
         "",
-        ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt', 'ema-only-epoch=000142.ckpt', 'gape60.ckpt', 'gg1342_testrun1_pruned.ckpt', 'JSD-v1-4.ckpt', 'LOKEAN_MISSIONARY_POV.ckpt', 'LOKEAN_PUPPYSTYLE_POV.ckpt', 'Mixed.ckpt', 'nai-full-latest.ckpt', 'nai-full-pruned.ckpt', 'pachu_artwork_style_v1_iter8000.ckpt', 'robo-diffusion-v1.ckpt', 'sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt', 'sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt', 'sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt', 'sd-v1-5-inpainting.ckpt', 'v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt', 'wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt', 'stable-diffusion-v1-4', 'Taiyi-Stable-Diffusion-1B-Chinese-v0.1', 'SF_EB_1.0_ema_vae.ckpt', 'vae-ft-ema-560000-ema-pruned.ckpt', 'vae-ft-mse-840000-ema-pruned.ckpt', 'kl-f8_model.ckpt', 'Dungeons-diffusion-model16000.ckpt', 'Dungeons-diffusion-model30000.ckpt', 'PaperCut_v1.ckpt', 'stable-diffusion_v1-4.ckpt', 'stable-diffusion_v1-5-pruned-emaonly.ckpt', 'stable-diffusion_v2-0_768-v-ema.ckpt', 'stable-diffusion_v2-1_512-ema-pruned.ckpt', 'stable-diffusion_v2-1_768-ema-pruned.ckpt', 'stable-diffusion_vae-ft-mse-840000-ema-pruned.ckpt'],
+        ['bf_fb_v3_t4_b16_noadd-ema-pruned-fp32.ckpt', 'ema-only-epoch=000142.ckpt', 'gape60.ckpt', 'gg1342_testrun1_pruned.ckpt', 'JSD-v1-4.ckpt', 'LOKEAN_MISSIONARY_POV.ckpt', 'LOKEAN_PUPPYSTYLE_POV.ckpt', 'Mixed.ckpt', 'nai-full-latest.ckpt', 'nai-full-pruned.ckpt', 'pachu_artwork_style_v1_iter8000.ckpt', 'robo-diffusion-v1.ckpt', 'sd-v1-1-full-ema.ckpt', 'sd-v1-1.ckpt', 'sd-v1-2-full-ema.ckpt', 'sd-v1-2.ckpt', 'sd-v1-3-full-ema.ckpt', 'sd-v1-3.ckpt', 'sd-v1-4-full-ema.ckpt', 'sd-v1-4.ckpt', 'sd-v1-5-inpainting.ckpt', 'v1-5-pruned-emaonly.ckpt', 'v1-5-pruned.ckpt', 'wd-v1-3-float32.ckpt', 'wd-v1-3-full-opt.ckpt', 'wd-v1-3-full.ckpt', 'stable-diffusion-v1-4', 'Taiyi-Stable-Diffusion-1B-Chinese-v0.1', 'SF_EB_1.0_ema_vae.ckpt', 'vae-ft-ema-560000-ema-pruned.ckpt', 'vae-ft-mse-840000-ema-pruned.ckpt', 'kl-f8_model.ckpt', 'Dungeons-diffusion-model16000.ckpt', 'Dungeons-diffusion-model30000.ckpt', 'PaperCut_v1.ckpt', 'stable-diffusion_v1-4.ckpt', 'stable-diffusion_v1-5-pruned-emaonly.ckpt', 'stable-diffusion_v2-0_768-v-ema.ckpt', 'stable-diffusion_v2-1_512-ema-pruned.ckpt', 'stable-diffusion_v2-1_768-ema-pruned.ckpt', 'stable-diffusion_vae-ft-mse-840000-ema-pruned.ckpt', 'stable-diffusion_vae-ft-ema-560000-ema-pruned.ckpt'],
     ),
     "97dd98b1": ModelDataInfo(
         "VAEDec1_4_fp16",
@@ -1035,7 +1035,7 @@ map = ModelMap({
         "https://huggingface.co/stabilityai/sd-vae-ft-mse-original",
         "https://huggingface.co/stabilityai/sd-vae-ft-ema-original/resolve/main/vae-ft-ema-560000-ema-pruned.ckpt",
         "This decoder was resumed from the original checkpoint, trained for 313198 steps and uses EMA weights. It uses the same loss configuration as the original checkpoint (L1 + LPIPS).",
-        ['vae-ft-ema-560000-ema-pruned.ckpt'],
+        ['vae-ft-ema-560000-ema-pruned.ckpt', 'stable-diffusion_vae-ft-ema-560000-ema-pruned.ckpt'],
     ),
     "64ec6f3c": ModelDataInfo(
         "",
