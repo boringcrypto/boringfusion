@@ -1,3 +1,4 @@
+import json
 import os
 from core import samplers
 from core.modules.clip import OpenCLIPEmbedder, PromptBuilder, CLIPEmbedder
@@ -5,22 +6,35 @@ from core.modules.vae_decoder import VAEDecoder
 from core.modules.stable_diffusion_v2 import StableDiffusion
 import models
 from torch import autocast
+from PIL import Image
+from PIL.ExifTags import TAGS
 
-def save_images(samples, material):
+def save_images(images, filename, comment):
     directory = "outputs/Textures"
     if not os.path.exists(directory):
         os.makedirs(directory)    
     base_count = len(os.listdir(directory))
-    for sample in samples:
-        sample.save(os.path.join(directory, f"{material} {base_count:05}.png"))
+    for image in images:
+        exif_data = image.getexif()
+        exif_data[0x9286] = comment
+        image.save(os.path.join(directory, f"{filename} {base_count:05}.png"), exif=exif_data)
         base_count += 1
 
 def main():
+    # load texture.json if exists
+    if os.path.exists('textures.json'):
+        with open('textures.json', 'r') as f:
+            textures = json.load(f)
+
     with autocast("cuda"):
         model = StableDiffusion(1, models.unet.SD1_5_fp32, parameterization="eps", tiling=True, use_fp16=True, device="cuda").cuda().half()
         decoder = VAEDecoder(models.decoder.VAEDec1_5mse_fp32, tiling=True).cuda()
         clip = CLIPEmbedder().cuda()
-        negative_prompt = clip("glare, imperfections, ugly, cartoon, drawn, blurry")
+        negative_prompt = "glare, imperfections, ugly, cartoon, drawn, blurry"
+        cfg = 7.0
+        steps=25
+
+        negative_prompt_embedding = clip(negative_prompt)
         while True:
             for material in [
 "80S Abstract Wallpaper",
@@ -57,21 +71,41 @@ def main():
 "Abstract 70S Wallpaper",
 "Abstract Mosaic Wall",
 "Abstract Pattern",
+"Abstract Patterned Wall",
+"Abstract Patterned Wallpaper",
 "Abstract Wall",
 "Abstract Wallpaper",
 "Acetate",
 "Acrylic Fabric",
+"Acrylic Fabric Texture",
+"Acrylic Fabric Wallpaper",
+"Acrylic Fabric Wallpaper Texture",
 "Acrylic",
 "Action Figures",
+"Adhesive Tape",
+"Adhesive Tape Texture",
+"Adhesive Tape Wallpaper",
+"Adhesive Tape Wallpaper Texture",
 "Advertisements",
 "Aerial Agricultural Landscape",
 "Aerial Asphalt",
 "Aerial Beach House",
+"Aerial Beach Landscape",
 "Aerial Beach Rocks",
+"Aerial Beach Sand",
+"Aerial Beach Shore",
+"Aerial Beach Sky",
 "Aerial Beach Sunset",
+"Aerial Beach Trees",
 "Aerial Beach View",
+"Aerial Beach Water",
+"Aerial Beach Waterfall",
+"Aerial Beach Waves",
 "Aerial Beach",
 "Aerial Beachscape",
+"Aerial Beachside",
+"Aerial Beachy Landscape",
+"Aerial Beachy View",
 "Aerial Cityscape",
 "Aerial Coastal Cliffs",
 "Aerial Coastal Dunes",
@@ -198,8 +232,10 @@ def main():
 "Antimicrobial Fabric",
 "Arabescato Marble",
 "Ardex",
+"Argyle Fabric",
 "Argyle Pattern",
 "Argyle Wallpaper",
+"Armadillo Shell",
 "Art Deco 70S Wallpaper",
 "Art Deco Wall",
 "Art Supplies, Such As Paint Tubes Or Watercolor Palettes",
@@ -1882,7 +1918,10 @@ def main():
 "Vintage Wood",
 "Vinyl Wallpaper",
 "Vinyl",
+"Violet Fabric",
+"Violet Wallpaper",
 "Voile Fabric",
+"Vulcanized Rubber",
 "Volakas Marble",
 "Waffle Fabric",
 "Wall Bricks Plaster",
@@ -2008,24 +2047,27 @@ def main():
 "Zebra Wallpaper",
 "Zigzag Pattern",
 "Zip Ties",
-                ]:
-
+"Zirconium",
+    ]:
                 print(material)
-                model.cuda()
                 # Run the denoising, creating the image (in latent space)
+                prompt = material + ", photograph, intricate detail, 4k"
                 sample = samplers.EulerASampler(model).sample(
-                    clip(material + ", photograph, intricate detail, 4k"), 
-                    negative_prompt,
+                    clip(prompt), 
+                    negative_prompt_embedding,
                     768,
                     768,
-                    steps=25
+                    cfg=cfg,
+                    steps=steps
                 )
-                model.cpu()
 
                 print("Decoding")
                 images = decoder(sample)
+
+                comment = json.dumps({"Prompt": prompt, "Negative Prompt": negative_prompt, "CFG": cfg, "Steps": steps, "Material": material})
+
                 print("Saving")
-                save_images(images, material)
+                save_images(images, material, comment)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,76 @@
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+<div id="app">
+    <div v-if="current">
+        <h1>{{ current.name }}</h1>
+        <p>
+            <a :href="'https://www.google.com/search?q=' + current.name +'&tbm=isch'" target="_blank"><button>Google</button></a>
+            <button @click="good">Good</button>
+            <button @click="bad">Bad</button>
+            {{ todo }}
+        </p>
+        <template v-for="file, i in current.files">
+            <img :src="'/Textures/' + file.path" width="300" @click="index = i">
+        </template>
+        <!-- create tiling background image -->
+        <div :style="style">Test</div>
+    </div>
+</div>
+
+<script>
+    const { createApp } = Vue
+
+    createApp({
+        computed: {
+            current: function() {
+                // find the item in textures where status is new
+                return this.textures.find(item => item.status === 'new')
+            },
+            style: function() {
+                return 'background-repeat: repeat; background-image: url("/Textures/' + this.current.files[this.index].path + '"); width: 100%; height: 2000px'
+            },
+            todo: function() {
+                return this.textures.filter(item => item.status === 'new').length
+            }
+        },
+        mounted() {
+            console.log('mounted')
+            // load json from server
+            fetch('/textures.json')
+                .then(response => response.json())
+                .then(data => {
+                    // create a list with all the values in data
+                    this.textures = Object.values(data)
+                })
+        },
+        methods: {
+            update: function(action) {
+                // send to the server
+                fetch('/update', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: action,
+                        name: this.current.name
+                    })
+                })
+            },
+            // change the status of the current texture to good
+            good: function() {
+                this.update('good')
+                this.current.status = 'good'
+            },
+            // change the status of the current texture to bad
+            bad: function() {
+                this.update('bad')
+                this.current.status = 'bad'
+            }
+        },
+        data() {
+        return {
+            message: 'Hello Vue!',
+            textures: [],
+            index: 0
+        }
+        }
+    }).mount('#app')
+</script>

@@ -132,6 +132,7 @@ class Sampler(BoringModule):
         negative_prompt = negative_prompt.to(self.device)
 
         samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape, callback)
+        
         return samples
 
 
