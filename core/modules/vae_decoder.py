@@ -4,6 +4,7 @@ from PIL import Image
 
 from .util import BoringModule, should_run_on_gpu
 from enum import Enum
+from .attention import MemoryEfficientAttnBlock
 
 def nonlinearity(x):
     # swish
@@ -54,6 +55,7 @@ class ResnetBlock(nn.Module):
         return x+h
 
 
+
 class AttnBlock(nn.Module):
     def __init__(self, in_channels, padding_mode):
         super().__init__()
@@ -78,6 +80,7 @@ class AttnBlock(nn.Module):
         k = k.reshape(batch, channels, height*width) # b,c,hw
         w_ = torch.bmm(q,k)     # b,hw,hw    w[b,i,j]=sum_c q[b,i,c]k[b,c,j]
         w_ = w_ * (int(channels)**(-0.5))
+        print(w_.shape)
         w_ = torch.nn.functional.softmax(w_, dim=2)
 
         # attend to values
@@ -101,7 +104,7 @@ class Decoder(nn.Module):
         # middle
         self.mid = nn.Module()
         self.mid.block_1 = ResnetBlock(512, 512, padding_mode=padding_mode)
-        self.mid.attn_1 = AttnBlock(512, padding_mode=padding_mode)
+        self.mid.attn_1 = MemoryEfficientAttnBlock(512, padding_mode=padding_mode)
         self.mid.block_2 = ResnetBlock(512, 512, padding_mode=padding_mode)
 
         # upsampling

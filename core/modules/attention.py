@@ -304,7 +304,7 @@ class MemoryEfficientAttnBlock(nn.Module):
         Note: this is a single-head self-attention operation
     """
     #
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, padding_mode="zeros"):
         super().__init__()
         self.in_channels = in_channels
 
@@ -313,22 +313,26 @@ class MemoryEfficientAttnBlock(nn.Module):
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0,
+                                 padding_mode=padding_mode)
         self.k = torch.nn.Conv2d(in_channels,
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0,
+                                 padding_mode=padding_mode)
         self.v = torch.nn.Conv2d(in_channels,
                                  in_channels,
                                  kernel_size=1,
                                  stride=1,
-                                 padding=0)
+                                 padding=0,
+                                 padding_mode=padding_mode)
         self.proj_out = torch.nn.Conv2d(in_channels,
                                         in_channels,
                                         kernel_size=1,
                                         stride=1,
-                                        padding=0)
+                                        padding=0,
+                                        padding_mode=padding_mode)
         self.attention_op: Optional[Any] = None
 
     def forward(self, x):

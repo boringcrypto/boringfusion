@@ -14,6 +14,8 @@
         </template>
         <!-- create tiling background image -->
         <div :style="style">Test</div>
+        <textarea ref="materials"></textarea>
+        <button @click="add_materials">Add</button>
     </div>
 </div>
 
@@ -23,8 +25,8 @@
     createApp({
         computed: {
             current: function() {
-                // find the item in textures where status is new
-                return this.textures.find(item => item.status === 'new')
+                // order textures by number of files
+                return this.textures.sort((a, b) => b.files.length - a.files.length).find(item => item.status === 'new')
             },
             style: function() {
                 return 'background-repeat: repeat; background-image: url("/Textures/' + this.current.files[this.index].path + '"); width: 100%; height: 2000px'
@@ -63,6 +65,15 @@
             bad: function() {
                 this.update('bad')
                 this.current.status = 'bad'
+            },
+            add_materials: function() {
+                // get the text from the textarea
+                const text = this.$refs.materials.value
+                // send to the server
+                fetch('/add_materials', {
+                    method: 'POST',
+                    body: text
+                })
             }
         },
         data() {

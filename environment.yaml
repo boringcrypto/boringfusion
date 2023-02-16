@@ -13,7 +13,7 @@ dependencies:
   - pip:
     - pytorch-lightning==1.8.0.post1
     - einops==0.5.0
-    - transformers==4.19.2
+    - transformers==4.26.1
     - k_diffusion==0.0.10
     - open_clip_torch==2.7.0
     - opencv-python==4.6.0.66
@@ -22,3 +22,4 @@ dependencies:
     - omegaconf==2.1.1
     - invisible-watermark>=0.1.5
     - xformers==0.0.16
+    - diffusers>=0.13.0.dev0

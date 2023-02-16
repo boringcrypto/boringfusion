@@ -99,14 +99,25 @@ class Sampler(BoringModule):
         self.alphas_cumprod = torch.tensor(alphas_cumprod, device = "cuda")
 
 
-    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape):
+    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape, start_step, end_step, start_latents):
         pass
 
     def set_seed(self, seed):
         seed_everything(seed if seed != RANDOM_SEED else random.randint(0, 1000000000))
 
     @torch.no_grad()
-    def sample(self, prompt: torch.Tensor or PromptBuilder, negative_prompt: torch.Tensor, width = 512, height = 512, batch_size = 1, cfg = 7.5, steps = 20, seed = RANDOM_SEED, callback = None):
+    def sample(
+            self, 
+            prompt: torch.Tensor or PromptBuilder, 
+            negative_prompt: torch.Tensor, 
+            width = 512, 
+            height = 512, 
+            batch_size = 1, 
+            cfg = 7.5, 
+            steps = 20,
+            seed = RANDOM_SEED, 
+            callback = None
+        ):
         """Create images from prompt
 
         Args:
@@ -131,6 +142,12 @@ class Sampler(BoringModule):
         prompt = prompt.to(self.device)
         negative_prompt = negative_prompt.to(self.device)
 
+        # copy the prompt to the batch dimension
+        prompt = prompt.repeat(batch_size, 1, 1)
+
+        # copy the negative prompt to the batch dimension
+        negative_prompt = negative_prompt.repeat(batch_size, 1, 1)
+
         samples = self._sample(batch_size, prompt, negative_prompt, cfg, steps, shape, callback)
         
         return samples
@@ -141,7 +158,9 @@ class BaseSampler(Sampler):
         super().__init__(model)
         self.sampler = sampler_class(model)
 
-    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape, callback):
+    def _sample(self, batch_size, prompt, negative_prompt, cfg, steps, shape, start_step, end_step, start_latents, callback):
+        if end_step == None:
+            end_step = steps
         samples = self.sampler.sample(S=steps,
             conditioning=prompt,
             batch_size=batch_size,
@@ -150,7 +169,8 @@ class BaseSampler(Sampler):
             unconditional_guidance_scale=cfg,
             unconditional_conditioning=negative_prompt,
             eta=0.0,
-            x_T=None)
+            x_T=start_latents,
+            timesteps=end_step - start_step if start_step != None else None)
         return samples
 
 class CompVisDenoiser(k_diffusion.external.DiscreteEpsDDPMDenoiser):
@@ -179,6 +199,7 @@ class KSampler(Sampler):
         sigmas = self._get_sigmas(steps)
         x = torch.randn([batch_size, *shape], device=self.device) * sigmas[0]
         model_wrap_cfg = CFGDenoiser(self.model_wrap)
+        print(prompt.shape, negative_prompt.shape)
         extra_args = {'cond': prompt, 'uncond': negative_prompt, 'cond_scale': cfg}
         samples = self._inner(model_wrap_cfg, x, sigmas, steps, extra_args=extra_args, callback=callback)
         return samples
