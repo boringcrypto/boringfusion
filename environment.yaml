@@ -22,4 +22,3 @@ dependencies:
     - omegaconf==2.1.1
     - invisible-watermark>=0.1.5
     - xformers==0.0.16
-    - diffusers>=0.13.0.dev0
