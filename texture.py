@@ -50,6 +50,12 @@ def import_texture(filename, textures):
 
     name = add_material(textures, name)
 
+    if textures[name]["status"] == "bad":
+        print("Deleting " + filename)
+        os.remove("outputs/Textures/" + filename)
+
+        return
+
     # if the name is in the dictionary, check if the image is already in the list
     for texture in textures[name]["files"]:
         if texture["path"] == filename:
@@ -235,10 +241,10 @@ class WebHandler(server.SimpleHTTPRequestHandler):
 
 def run_server():
     import_textures()
-    WebHandler.init()
-    clean_textures(WebHandler.textures)
-    WebHandler.save()
-    socketserver.TCPServer(("", 8000), WebHandler).serve_forever()
+    # WebHandler.init()
+    # clean_textures(WebHandler.textures)
+    # WebHandler.save()
+    # socketserver.TCPServer(("", 8000), WebHandler).serve_forever()
 
 def main():
     run_server()
